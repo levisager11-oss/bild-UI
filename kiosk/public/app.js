@@ -12,7 +12,7 @@
     ['foto', 'Foto'], ['comic', 'Comic'], ['aquarell', 'Aquarell'], ['oel', 'Ölbild'],
     ['pixel', 'Pixel-Art'], ['bausteine', 'Bausteine'], ['skizze', 'Skizze'], ['render', '3D'],
   ];
-  const SAMPLERS = ['euler', 'er_sde', 'dpmpp_2m', 'euler_ancestral', 'heun'];
+  const SAMPLERS = ['er_sde', 'euler', 'dpmpp_2m', 'euler_ancestral', 'heun'];
   // Node ids in workflow.json
   const NODE_UPSAMPLER = '11';
   const NODE_ENCODE = '4';
@@ -42,7 +42,7 @@
     proSeed: $('proSeed'), proSeedDice: $('proSeedDice'), proSampler: $('proSampler'),
     proUpsampler: $('proUpsampler'), proResearch: $('proResearch'), proResearchRow: $('proResearchRow'), proReset: $('proReset'),
     proReference: $('proReference'), proReferenceRow: $('proReferenceRow'),
-    aResearch: $('aResearch'), aReference: $('aReference'),
+    aResearch: $('aResearch'), aReference: $('aReference'), aQuality: $('aQuality'),
     admin: $('admin'), adminStatus: $('adminStatus'), adminMsg: $('adminMsg'), adminSave: $('adminSave'),
     adminSaver: $('adminSaver'), adminReload: $('adminReload'),
     aSteps: $('aSteps'), aIdle: $('aIdle'), aSaver: $('aSaver'), aMaxVariants: $('aMaxVariants'),
@@ -66,7 +66,7 @@
   let ws = null;
 
   function defaultAdvanced() {
-    return { steps: settings.steps, seedMode: 'random', seed: '', sampler: 'euler', upsampler: settings.upsampler, research: true, reference: true };
+    return { steps: settings.steps, seedMode: 'random', seed: '', sampler: 'er_sde', upsampler: settings.upsampler, research: true, reference: true };
   }
   function advancedChanged() {
     const d = defaultAdvanced();
@@ -1012,6 +1012,7 @@
     setChecked(el.aAllowAdvanced, settings.allowAdvanced);
     setChecked(el.aResearch, settings.research);
     setChecked(el.aReference, settings.reference);
+    setChecked(el.aQuality, settings.quality || 'maximal');
     el.adminMsg.textContent = '';
     stopScreensaver();
     renderAdminStatus();
@@ -1031,6 +1032,7 @@
         allowAdvanced: getChecked(el.aAllowAdvanced) === 'true',
         research: getChecked(el.aResearch) === 'true',
         reference: getChecked(el.aReference) === 'true',
+        quality: getChecked(el.aQuality) || 'maximal',
       });
       const wasDefault = !advancedChanged();
       settings = data.settings;

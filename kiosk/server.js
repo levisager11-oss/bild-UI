@@ -50,6 +50,7 @@ const DEFAULT_SETTINGS = {
   allowAdvanced: true,   // visitors may open "Profi-Einstellungen"
   research: true,        // let ask look things up on the web when a prompt needs it
   reference: true,       // give the image model a free Wikipedia photo of the named thing
+  quality: 'maximal',    // schnell | hoch | maximal, see QUALITY_LEVELS
 };
 
 // Samplers visitors can pick in the advanced settings.
@@ -112,6 +113,7 @@ function cleanSettings(input) {
   if (input.allowAdvanced != null) s.allowAdvanced = !!input.allowAdvanced;
   if (input.research != null) s.research = !!input.research;
   if (input.reference != null) s.reference = !!input.reference;
+  if (['schnell', 'hoch', 'maximal'].includes(input.quality)) s.quality = input.quality;
   return s;
 }
 
@@ -419,7 +421,7 @@ async function getAskStatus() {
 
 // Visitor overrides from "Profi-Einstellungen". Missing values fall back to the settings.
 function cleanAdvanced(input) {
-  const a = { steps: settings.steps, upsampler: settings.upsampler, sampler: 'euler', seed: null };
+  const a = { steps: settings.steps, upsampler: settings.upsampler, sampler: QUALITY.sampler, seed: null };
   if (!settings.allowAdvanced || !input || typeof input !== 'object') return a;
   const steps = Math.round(Number(input.steps));
   if (steps >= 4 && steps <= 40) a.steps = steps;
@@ -442,13 +444,55 @@ const REFERENCE_REQUEST = {
 };
 const ORIENTATION = { '1:1': 'square', '2:3': 'portrait (taller than wide)', '3:2': 'landscape (wider than tall)' };
 
-function buildWorkflow({ prompt, format, style, variants, advanced, facts, reference }) {
+// Quality settings for every image. Values found in the test night of 2026-10-28/29 (see TESTBERICHT).
+// In lab mode (KIOSK_LAB=1) a request may override any of them with `lab`.
+const QUALITY = {
+  sampler: 'er_sde',          // tested: clearly more real detail than euler (fur, faces, small parts)
+  scheduler: 'simple',        // KSampler scheduler, or 'flux2' for the resolution-aware Flux2Scheduler (no visible gain)
+  megapixels: null,           // null = by quality level and number of images (QUALITY_LEVELS)
+  hires: null,                // second pass { scale, denoise, steps } on the upscaled latent, or null
+  sharpen: 0,                 // ImageSharpen alpha after decoding, 0 = off
+  refMegapixels: 0.5,         // size the reference photo is read at
+  text: {                     // prompt upsampler (TextGenerate)
+    temperature: 1.0, top_k: 1, top_p: 0.95, min_p: 0.0, repetition_penalty: 1.05, presence_penalty: 1.5,
+    thinking: false, max_length: 3584,
+  },
+  systemExtra: '',            // appended to the upsampler system prompt
+};
+const LAB = process.env.KIOSK_LAB === '1';
+
+// Output size in megapixels per quality level and number of images. Native 2 MP gave the most natural
+// faces and finest detail (tested); 4 images at 2 MP would take about a minute, so fewer pixels there.
+const QUALITY_LEVELS = {
+  schnell: { 1: 1.0, 2: 1.0, 4: 1.0 },
+  hoch: { 1: 1.5, 2: 1.25, 4: 1.0 },
+  maximal: { 1: 2.0, 2: 1.5, 4: 1.0 },
+};
+
+// Width/height for a format at a megapixel target, multiples of 16.
+function sizeFor(f, megapixels) {
+  if (!megapixels) return { width: f.width, height: f.height };
+  const k = Math.sqrt((megapixels * 1024 * 1024) / (f.width * f.height));
+  const r16 = (v) => Math.max(256, Math.round((v * k) / 16) * 16);
+  return { width: r16(f.width), height: r16(f.height) };
+}
+
+function buildWorkflow({ prompt, format, style, variants, advanced, facts, reference, lab }) {
   const f = FORMATS[format] || FORMATS.square;
   const wf = structuredClone(WORKFLOW);
-  const styleText = STYLES[style];
   const adv = cleanAdvanced(advanced);
-  const seed = adv.seed ?? randomSeed();
+  const L = LAB && lab && typeof lab === 'object' ? lab : {};
+  const styleText = L.styleText !== undefined ? L.styleText : STYLES[style];
+  const q = { ...QUALITY, ...L, text: { ...QUALITY.text, ...(L.text || {}) } };
+  const steps = L.steps || adv.steps;
+  const sampler = L.sampler || adv.sampler;
+  const seed = L.seed ?? adv.seed ?? randomSeed();
+  const textSeed = L.textSeed ?? randomSeed();
+  const level = QUALITY_LEVELS[settings.quality] || QUALITY_LEVELS.maximal;
+  const { width, height } = sizeFor(f, q.megapixels ?? level[variants] ?? 1.0);
   const factText = facts ? `Visual reference facts from a web search (use them to depict the named things accurately, do not render them as text): ${facts}` : '';
+  let positive = ['4', 0];
+  let negative = ['5', 0];
 
   if (reference) {
     // The photo goes to the image model (ReferenceMultiLatent) and to the upsampler, which can see images.
@@ -456,55 +500,107 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
     wf['21'] = { class_type: 'ConditioningZeroOut', inputs: { conditioning: ['4', 0] } };
     wf['22'] = {
       class_type: 'ReferenceMultiLatent',
-      inputs: { positive: ['4', 0], negative: ['21', 0], vae: ['3', 0], resolution: 'resize', 'resolution.megapixels': 0.5, 'images.image0': ['20', 0] },
+      inputs: { positive: ['4', 0], negative: ['21', 0], vae: ['3', 0], resolution: 'resize', 'resolution.megapixels': q.refMegapixels, 'images.image0': ['20', 0] },
     };
-    wf['7'].inputs.positive = ['22', 0];
-    wf['7'].inputs.negative = ['22', 1];
+    positive = ['22', 0];
+    negative = ['22', 1];
     delete wf['5'];
   }
 
-  if (adv.upsampler && reference) {
-    const mode = reference.transform && !styleText ? 'transform' : 'faithful';
-    let request = REFERENCE_REQUEST[mode](prompt, reference.subject);
-    if (styleText) request += `\nStyle: ${styleText}.`;
-    request += `\nThe new image is ${ORIENTATION[f.canvas]}.`;
-    // When the thing gets transformed, facts about its real surroundings pull the image back to the photo (tested), so leave them out.
-    if (facts && mode === 'faithful') request += `\nVisual facts from a web search: ${facts}`;
-    wf['23'] = { class_type: 'BatchImagesNode', inputs: { 'images.image0': ['20', 0] } };
-    Object.assign(wf['11'].inputs, { prompt: request, system_prompt: EDIT_SYSTEM_PROMPT, 'sampling_mode.seed': randomSeed(), image: ['23', 0] });
-  } else if (adv.upsampler) {
-    let request = `TARGET CANVAS: ${f.canvas}\n${prompt}`;
-    if (styleText) request += `\nStyle: ${styleText}.`;
-    if (factText) request += `\n${factText}`;
-    wf['11'].inputs.prompt = request;
-    wf['11'].inputs.system_prompt = SYSTEM_PROMPT;
-    wf['11'].inputs['sampling_mode.seed'] = randomSeed();
+  const refMode = reference ? (adv.upsampler ? (reference.transform && !styleText ? 'transform' : 'faithful') : 'direct') : null;
+  if (adv.upsampler) {
+    let request;
+    let system;
+    if (reference) {
+      request = REFERENCE_REQUEST[refMode](prompt, reference.subject);
+      if (styleText) request += `\nStyle: ${styleText}.`;
+      request += `\nThe new image is ${ORIENTATION[f.canvas]}.`;
+      // When the thing gets transformed, facts about its real surroundings pull the image back to the photo (tested), so leave them out.
+      if (facts && refMode === 'faithful') request += `\nVisual facts from a web search: ${facts}`;
+      wf['23'] = { class_type: 'BatchImagesNode', inputs: { 'images.image0': ['20', 0] } };
+      wf['11'].inputs.image = ['23', 0];
+      system = EDIT_SYSTEM_PROMPT;
+    } else {
+      request = `TARGET CANVAS: ${f.canvas}\n${prompt}`;
+      if (styleText) request += `\nStyle: ${styleText}.`;
+      if (factText) request += `\n${factText}`;
+      system = SYSTEM_PROMPT;
+    }
+    const t = q.text;
+    Object.assign(wf['11'].inputs, {
+      prompt: request,
+      system_prompt: q.systemExtra ? `${system}\n${q.systemExtra}` : system,
+      max_length: t.max_length,
+      thinking: !!t.thinking,
+      mtp: t.mtp || 'off',
+      'sampling_mode.temperature': t.temperature,
+      'sampling_mode.top_k': t.top_k,
+      'sampling_mode.top_p': t.top_p,
+      'sampling_mode.min_p': t.min_p,
+      'sampling_mode.repetition_penalty': t.repetition_penalty,
+      'sampling_mode.presence_penalty': t.presence_penalty,
+      'sampling_mode.seed': textSeed,
+    });
   } else {
     // Without the language model the prompt goes straight to the text encoder.
     for (const id of ['11', '12', '13']) delete wf[id];
     wf['4'].inputs.text = [prompt, styleText && `Style: ${styleText}.`, facts].filter(Boolean).join('. ');
   }
-  wf['6'].inputs.width = f.width;
-  wf['6'].inputs.height = f.height;
-  wf['6'].inputs.batch_size = variants;
-  wf['7'].inputs.seed = seed;
-  wf['7'].inputs.steps = adv.steps;
-  wf['7'].inputs.sampler_name = adv.sampler;
 
+  wf['6'].inputs.width = width;
+  wf['6'].inputs.height = height;
+  wf['6'].inputs.batch_size = variants;
+
+  // Main sampling pass. Node id 7 stays the sampler, the page shows its progress.
+  if (q.scheduler === 'flux2') {
+    wf['40'] = { class_type: 'RandomNoise', inputs: { noise_seed: seed } };
+    wf['41'] = { class_type: 'BasicGuider', inputs: { model: ['1', 0], conditioning: positive } };
+    wf['42'] = { class_type: 'KSamplerSelect', inputs: { sampler_name: sampler } };
+    wf['43'] = { class_type: 'Flux2Scheduler', inputs: { steps, width, height } };
+    wf['7'] = { class_type: 'SamplerCustomAdvanced', inputs: { noise: ['40', 0], guider: ['41', 0], sampler: ['42', 0], sigmas: ['43', 0], latent_image: ['6', 0] } };
+  } else {
+    Object.assign(wf['7'].inputs, { positive, negative, seed, steps, sampler_name: sampler, scheduler: q.scheduler });
+  }
+  let latent = ['7', 0];
+
+  // Optional second pass: upscale the latent and refine it (more detail at a higher resolution).
+  if (q.hires && q.hires.scale > 1) {
+    if (!reference && !wf['5']) wf['5'] = structuredClone(WORKFLOW['5']);
+    wf['45'] = { class_type: 'LatentUpscaleBy', inputs: { samples: latent, upscale_method: q.hires.method || 'bicubic', scale_by: q.hires.scale } };
+    wf['46'] = {
+      class_type: 'KSampler',
+      inputs: {
+        model: ['1', 0], positive, negative, latent_image: ['45', 0],
+        seed: seed + 1, steps: q.hires.steps || steps, cfg: 1, sampler_name: sampler, scheduler: q.hires.scheduler || 'simple', denoise: q.hires.denoise,
+      },
+    };
+    latent = ['46', 0];
+  }
+  // With the flux2 path and no hires pass, node 5 (negative) is unused; ComfyUI ignores unused nodes.
+  wf['8'].inputs.samples = latent;
+  if (q.sharpen > 0) {
+    wf['47'] = { class_type: 'ImageSharpen', inputs: { image: ['8', 0], sharpen_radius: 1, sigma: 1, alpha: q.sharpen } };
+    wf['9'].inputs.images = ['47', 0];
+  }
+
+  const hiresSize = q.hires && q.hires.scale > 1
+    ? { width: Math.round((width * q.hires.scale) / 16) * 16, height: Math.round((height * q.hires.scale) / 16) * 16 } : null;
   return {
     workflow: wf,
     info: {
       seed,
-      steps: adv.steps,
-      sampler: adv.sampler,
-      width: f.width,
-      height: f.height,
+      steps,
+      sampler,
+      scheduler: q.scheduler,
+      width: hiresSize ? hiresSize.width : width,
+      height: hiresSize ? hiresSize.height : height,
+      hires: !!hiresSize,
       variants,
       upsampler: adv.upsampler,
       model: wf['1'].inputs.unet_name.replace('.safetensors', ''),
       textEncoder: wf['2'].inputs.clip_name.replace('.safetensors', ''),
       languageModel: adv.upsampler ? WORKFLOW['12'].inputs.clip_name.replace('.safetensors', '') : null,
-      reference: reference ? { mode: adv.upsampler ? (reference.transform && !styleText ? 'transform' : 'faithful') : 'direct', megapixels: 0.5 } : null,
+      reference: reference ? { mode: refMode, megapixels: q.refMegapixels } : null,
     },
   };
 }
@@ -559,7 +655,7 @@ async function handleGenerate(req, res) {
   const reference = settings.reference && r && typeof r.name === 'string' && knownReference(r.name)
     ? { name: r.name, subject: String(r.subject || 'the main subject').slice(0, 100), transform: r.transform === true }
     : null;
-  const { workflow, info } = buildWorkflow({ prompt, format: body.format, style: body.style, variants, advanced: body.advanced, facts, reference });
+  const { workflow, info } = buildWorkflow({ prompt, format: body.format, style: body.style, variants, advanced: body.advanced, facts, reference, lab: body.lab });
   try {
     const r = await comfyPost('/prompt', {
       prompt: workflow,

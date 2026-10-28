@@ -1,0 +1,19 @@
+{
+  "name": "02 Schritte, Auflösung, Verfeinerungs-Durchgang, Nachschärfen (er_sde)",
+  "seeds": [1001, 2002],
+  "prompts": [
+    { "key": "loeten", "prompt": "Eine Lernende lötet in einer Elektronikwerkstatt eine Leiterplatte, Nahaufnahme" },
+    { "key": "fuchs", "prompt": "Ein Fuchs mit Schutzbrille an einer Drehbank" },
+    { "key": "gasse", "prompt": "Eine Altstadtgasse mit Lauben und einem Brunnen" },
+    { "key": "drache", "prompt": "Ein Drache aus Zahnrädern fliegt über die Aare" }
+  ],
+  "variants": [
+    { "key": "16", "lab": { "sampler": "er_sde" } },
+    { "key": "24", "lab": { "sampler": "er_sde", "steps": 24 } },
+    { "key": "1.5mp", "lab": { "sampler": "er_sde", "megapixels": 1.5 } },
+    { "key": "2mp", "lab": { "sampler": "er_sde", "megapixels": 2.0 } },
+    { "key": "hires35", "lab": { "sampler": "er_sde", "hires": { "scale": 1.5, "denoise": 0.35, "steps": 16 } } },
+    { "key": "hires50", "lab": { "sampler": "er_sde", "hires": { "scale": 1.5, "denoise": 0.5, "steps": 16 } } },
+    { "key": "sharp", "lab": { "sampler": "er_sde", "sharpen": 0.3 } }
+  ]
+}

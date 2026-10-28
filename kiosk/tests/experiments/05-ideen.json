@@ -1,0 +1,182 @@
+{
+  "name": "05 Alle Prompt-Ideen und Würfel-Beispiele mit den besten Einstellungen",
+  "seeds": [
+    5101
+  ],
+  "prompts": [
+    {
+      "key": "idee01",
+      "prompt": "Ein Roboter, der in einer Werkstatt ein Velo repariert",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee02",
+      "prompt": "Der Zytglogge in Bern als Raumschiff kurz vor dem Start",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee03",
+      "prompt": "Eine Katze mit Schweisshelm, die eine Metallskulptur schweisst",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee04",
+      "prompt": "Ein Bär, der in einem Büro in Bern am Laptop programmiert",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee05",
+      "prompt": "Eine Stadt der Zukunft mit Solardächern und Seilbahnen",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee06",
+      "prompt": "Ein Dinosaurier als Elektriker auf einer Leiter",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee07",
+      "prompt": "Ein Unterwasser-Labor mit leuchtenden Fischen",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee08",
+      "prompt": "Ein Zug aus Legosteinen fährt durch die Alpen",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee09",
+      "prompt": "Ein Astronaut grilliert Würste auf dem Mond",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee10",
+      "prompt": "Eine Leiterplatte, die von oben wie eine Stadt aussieht",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee11",
+      "prompt": "Ein Drache aus Zahnrädern fliegt über die Aare",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee12",
+      "prompt": "Ein Hamster als Pilot in einem kleinen Propellerflugzeug",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee13",
+      "prompt": "Ein Gemüsegarten auf dem Dach eines Hochhauses",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee14",
+      "prompt": "Ein selbstgebauter Rennwagen im Comic-Stil",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee15",
+      "prompt": "Ein Pinguin als Koch in einer grossen Küche",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee16",
+      "prompt": "Eine gemütliche Schreinerei im Morgenlicht",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee17",
+      "prompt": "Ein riesiger 3D-Drucker druckt ein Haus",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee18",
+      "prompt": "Ein Fuchs mit Schutzbrille an einer Drehbank",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee19",
+      "prompt": "Eine Bibliothek in einem alten Baum",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "idee20",
+      "prompt": "Ein Wasserkraftwerk in den Bergen als Aquarell",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "wuerfel1",
+      "prompt": "Ein Bär fährt Snowboard auf dem Mond",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "wuerfel2",
+      "prompt": "Eine Kuh repariert ein Velo auf einem Gletscher",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "wuerfel3",
+      "prompt": "Eine Schnecke spielt Schach in einer Werkstatt voller Zahnräder",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "wuerfel4",
+      "prompt": "Ein Pinguin lötet eine Leiterplatte auf einem Hausdach",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "wuerfel5",
+      "prompt": "Ein Fuchs programmiert einen Roboter im Dschungel",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "wuerfel6",
+      "prompt": "Eine Katze kocht Fondue in einer Schreinerei",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "wuerfel7",
+      "prompt": "Ein Igel hobelt ein Brett an der Aare",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "wuerfel8",
+      "prompt": "Ein Dinosaurier malt ein Bild unter Wasser",
+      "research": true,
+      "reference": true
+    }
+  ],
+  "variants": [
+    {
+      "key": "best",
+      "lab": {}
+    }
+  ]
+}

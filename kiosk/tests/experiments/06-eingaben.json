@@ -1,0 +1,21 @@
+{
+  "name": "06 Eingaben von Besuchern: Mundart, Tippfehler, Sprachen, kurz, lang",
+  "seeds": [6101],
+  "prompts": [
+    { "key": "mundart", "prompt": "e chatz wo uf em velo dür bärn fahrt" },
+    { "key": "tippfehler", "prompt": "ein roboter der pizza bakt in einer kuche mit vile tomaten" },
+    { "key": "franz", "prompt": "un ours qui fait du ski dans les Alpes" },
+    { "key": "englisch", "prompt": "a tiny dragon drinking hot chocolate in a cozy cabin" },
+    { "key": "kurz", "prompt": "Hund" },
+    { "key": "anzahl", "prompt": "Drei rote Ballone und zwei gelbe Enten auf einem See" },
+    { "key": "text", "prompt": "Ein T-Shirt mit dem Aufdruck «TF Bern»" },
+    { "key": "lang", "prompt": "Ein gemütliches Wohnzimmer im Jahr 2080, an der Wand hängt ein grosser Bildschirm mit einer Weltkarte, ein Roboterhund schläft auf einem roten Teppich, draussen vor dem Fenster fliegen Lufttaxis über eine grüne Stadt mit vielen Bäumen, auf dem Tisch stehen eine Tasse Tee und ein Teller mit Gipfeli" },
+    { "key": "emotion", "prompt": "Ein trauriger Kaktus, der Geburtstag hat" },
+    { "key": "abstrakt", "prompt": "Wie Musik aussehen würde" },
+    { "key": "kind", "prompt": "Einhorn mit Regenbogen und Glitzer" },
+    { "key": "technik", "prompt": "Explosionszeichnung eines Elektromotors" }
+  ],
+  "variants": [
+    { "key": "aktuell", "lab": {} }
+  ]
+}

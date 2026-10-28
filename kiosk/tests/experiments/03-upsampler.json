@@ -1,0 +1,85 @@
+{
+  "name": "03 Prompt-Verbesserer: Sampling, Thinking, MTP",
+  "seeds": [
+    3101,
+    3202
+  ],
+  "prompts": [
+    {
+      "key": "roboter",
+      "prompt": "Ein Roboter, der in einer Werkstatt ein Velo repariert"
+    },
+    {
+      "key": "baumhaus",
+      "prompt": "Eine Bibliothek in einem alten Baum"
+    },
+    {
+      "key": "hamster",
+      "prompt": "Ein Hamster als Pilot in einem kleinen Propellerflugzeug"
+    },
+    {
+      "key": "stadt",
+      "prompt": "Eine Stadt der Zukunft mit Solardächern und Seilbahnen",
+      "format": "landscape"
+    }
+  ],
+  "variants": [
+    {
+      "key": "greedy",
+      "lab": {
+        "megapixels": 1
+      }
+    },
+    {
+      "key": "sample07",
+      "lab": {
+        "megapixels": 1,
+        "text": {
+          "temperature": 0.7,
+          "top_k": 40,
+          "top_p": 0.9,
+          "min_p": 0.05
+        }
+      }
+    },
+    {
+      "key": "sample10",
+      "lab": {
+        "megapixels": 1,
+        "text": {
+          "temperature": 1,
+          "top_k": 64,
+          "top_p": 0.95,
+          "min_p": 0.05
+        }
+      }
+    },
+    {
+      "key": "thinking",
+      "lab": {
+        "megapixels": 1,
+        "text": {
+          "thinking": true
+        }
+      }
+    },
+    {
+      "key": "mtp",
+      "lab": {
+        "megapixels": 1,
+        "text": {
+          "mtp": "auto"
+        }
+      }
+    },
+    {
+      "key": "nopresence",
+      "lab": {
+        "megapixels": 1,
+        "text": {
+          "presence_penalty": 0
+        }
+      }
+    }
+  ]
+}

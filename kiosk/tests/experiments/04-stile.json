@@ -1,0 +1,143 @@
+{
+  "name": "04 Stile: heutige vs. ausführlichere Stil-Texte",
+  "seeds": [
+    4101,
+    4202
+  ],
+  "prompts": [
+    {
+      "key": "katze",
+      "prompt": "Eine Katze sitzt auf einer Fensterbank"
+    },
+    {
+      "key": "gasse",
+      "prompt": "Eine Altstadtgasse mit Lauben und einem Brunnen"
+    },
+    {
+      "key": "roboter",
+      "prompt": "Ein Roboter repariert in einer Werkstatt ein Velo"
+    }
+  ],
+  "variants": [
+    {
+      "key": "foto-alt",
+      "style": "foto",
+      "lab": {
+        "megapixels": 1
+      }
+    },
+    {
+      "key": "foto-neu",
+      "style": "foto",
+      "lab": {
+        "megapixels": 1,
+        "styleText": "a high-quality professional photograph with natural light, realistic textures and sharp focus"
+      }
+    },
+    {
+      "key": "comic-alt",
+      "style": "comic",
+      "lab": {
+        "megapixels": 1
+      }
+    },
+    {
+      "key": "comic-neu",
+      "style": "comic",
+      "lab": {
+        "megapixels": 1,
+        "styleText": "a vibrant comic book illustration with bold black ink outlines, flat bright colors and halftone shading"
+      }
+    },
+    {
+      "key": "aquarell-alt",
+      "style": "aquarell",
+      "lab": {
+        "megapixels": 1
+      }
+    },
+    {
+      "key": "aquarell-neu",
+      "style": "aquarell",
+      "lab": {
+        "megapixels": 1,
+        "styleText": "a delicate watercolor painting on textured paper with soft color washes, pigment blooms and white paper showing through"
+      }
+    },
+    {
+      "key": "oel-alt",
+      "style": "oel",
+      "lab": {
+        "megapixels": 1
+      }
+    },
+    {
+      "key": "oel-neu",
+      "style": "oel",
+      "lab": {
+        "megapixels": 1,
+        "styleText": "a classical oil painting on canvas with rich colors and thick, visible impasto brush strokes"
+      }
+    },
+    {
+      "key": "pixel-alt",
+      "style": "pixel",
+      "lab": {
+        "megapixels": 1
+      }
+    },
+    {
+      "key": "pixel-neu",
+      "style": "pixel",
+      "lab": {
+        "megapixels": 1,
+        "styleText": "retro 16-bit pixel art with a limited color palette and crisp square pixels, like a scene from a classic video game"
+      }
+    },
+    {
+      "key": "bausteine-alt",
+      "style": "bausteine",
+      "lab": {
+        "megapixels": 1
+      }
+    },
+    {
+      "key": "bausteine-neu",
+      "style": "bausteine",
+      "lab": {
+        "megapixels": 1,
+        "styleText": "a scene built entirely from colorful plastic toy bricks, every object made of bricks, macro photograph with shallow depth of field"
+      }
+    },
+    {
+      "key": "skizze-alt",
+      "style": "skizze",
+      "lab": {
+        "megapixels": 1
+      }
+    },
+    {
+      "key": "skizze-neu",
+      "style": "skizze",
+      "lab": {
+        "megapixels": 1,
+        "styleText": "a detailed graphite pencil sketch on white paper with cross-hatching and visible pencil strokes, black and white"
+      }
+    },
+    {
+      "key": "render-alt",
+      "style": "render",
+      "lab": {
+        "megapixels": 1
+      }
+    },
+    {
+      "key": "render-neu",
+      "style": "render",
+      "lab": {
+        "megapixels": 1,
+        "styleText": "a cute stylized 3D animated-film render with soft studio lighting, smooth rounded shapes and rich colors"
+      }
+    }
+  ]
+}

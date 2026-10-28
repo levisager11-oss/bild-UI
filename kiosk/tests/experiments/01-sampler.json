@@ -1,0 +1,20 @@
+{
+  "name": "01 Sampler und Scheduler",
+  "seeds": [1001, 2002],
+  "prompts": [
+    { "key": "loeten", "prompt": "Eine Lernende lötet in einer Elektronikwerkstatt eine Leiterplatte, Nahaufnahme" },
+    { "key": "fuchs", "prompt": "Ein Fuchs mit Schutzbrille an einer Drehbank" },
+    { "key": "kraftwerk", "prompt": "Ein Wasserkraftwerk in den Bergen bei Sonnenuntergang" },
+    { "key": "drache", "prompt": "Ein Drache aus Zahnrädern fliegt über die Aare" },
+    { "key": "schild", "prompt": "Ein Holzschild mit der Aufschrift «Tag der offenen Tür» vor einer Werkstatt" },
+    { "key": "pinguin", "prompt": "Ein Pinguin als Koch in einer grossen Küche", "style": "comic" }
+  ],
+  "variants": [
+    { "key": "euler-simple", "lab": { "sampler": "euler", "scheduler": "simple" } },
+    { "key": "euler-flux2", "lab": { "sampler": "euler", "scheduler": "flux2" } },
+    { "key": "ersde-simple", "lab": { "sampler": "er_sde", "scheduler": "simple" } },
+    { "key": "ersde-flux2", "lab": { "sampler": "er_sde", "scheduler": "flux2" } },
+    { "key": "resms-simple", "lab": { "sampler": "res_multistep", "scheduler": "simple" } },
+    { "key": "euler-beta", "lab": { "sampler": "euler", "scheduler": "beta" } }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "name": "08 Formate und 4 Varianten",
+  "seeds": [
+    8101
+  ],
+  "prompts": [
+    {
+      "key": "hoch-leuchtturm",
+      "prompt": "Ein Leuchtturm an einer felsigen Küste bei Sturm",
+      "format": "portrait"
+    },
+    {
+      "key": "quer-bergsee",
+      "prompt": "Ein Bergsee mit Spiegelung der Berge am Morgen",
+      "format": "landscape"
+    },
+    {
+      "key": "hoch-roboter",
+      "prompt": "Ein freundlicher Roboter giesst Blumen auf einem Balkon",
+      "format": "portrait",
+      "style": "render"
+    },
+    {
+      "key": "quer-zug",
+      "prompt": "Ein Zug aus Spielzeugbausteinen fährt durch die Alpen",
+      "format": "landscape",
+      "style": "bausteine"
+    },
+    {
+      "key": "vier-katze",
+      "prompt": "Eine Katze mit Schweisshelm schweisst eine Metallskulptur",
+      "variants": 4
+    },
+    {
+      "key": "vier-astronaut",
+      "prompt": "Ein Astronaut grilliert Würste auf dem Mond",
+      "variants": 4,
+      "format": "landscape"
+    }
+  ],
+  "variants": [
+    {
+      "key": "best",
+      "lab": {}
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "07 Echte Motive: ohne vs. mit Recherche und Referenzfoto",
+  "seeds": [7101, 7202],
+  "prompts": [
+    { "key": "bundeshaus", "prompt": "Das Bundeshaus in Bern bei Nacht", "research": true, "reference": true },
+    { "key": "baerengraben", "prompt": "Der Bärenpark in Bern mit Bären im Schnee", "research": true, "reference": true },
+    { "key": "muenster", "prompt": "Das Berner Münster im Herbst", "research": true, "reference": true },
+    { "key": "kapellbruecke", "prompt": "Die Kapellbrücke in Luzern am Morgen", "research": true, "reference": true },
+    { "key": "chillon", "prompt": "Schloss Chillon am Genfersee", "research": true, "reference": true },
+    { "key": "steinbock", "prompt": "Ein Steinbock auf einem Felsen", "research": true, "reference": true },
+    { "key": "murmeltier", "prompt": "Ein Murmeltier vor seinem Bau", "research": true, "reference": true },
+    { "key": "lok", "prompt": "Eine SBB Re 460 Lokomotive fährt durch die Alpen", "research": true, "reference": true },
+    { "key": "viadukt", "prompt": "Der Glacier Express auf dem Landwasserviadukt", "research": true, "reference": true },
+    { "key": "rotmilan", "prompt": "Ein Rotmilan fliegt über ein Feld", "research": true, "reference": true },
+    { "key": "eiffel-schoko", "prompt": "Der Eiffelturm aus Schokolade", "research": true, "reference": true },
+    { "key": "matterhorn-vulkan", "prompt": "Das Matterhorn als Vulkan", "research": true, "reference": true },
+    { "key": "messer-raumschiff", "prompt": "Ein Schweizer Taschenmesser als Raumschiff", "research": true, "reference": true },
+    { "key": "bundeshaus-comic", "prompt": "Das Bundeshaus mit tanzenden Bären", "style": "comic", "research": true, "reference": true },
+    { "key": "kapell-aquarell", "prompt": "Die Kapellbrücke in Luzern", "style": "aquarell", "research": true, "reference": true }
+  ],
+  "variants": [
+    { "key": "ohne", "noFacts": true, "noReference": true, "lab": {} },
+    { "key": "mit", "lab": {} }
+  ]
+}
