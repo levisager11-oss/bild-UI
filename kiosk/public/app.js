@@ -1,18 +1,21 @@
 (() => {
   'use strict';
 
-  // ---------- Settings ----------
-  const IDLE_MS = 60_000;       // inactivity before the "still there?" prompt
-  const IDLE_COUNTDOWN = 10;    // seconds shown in the prompt before reset
-  const ideaCount = () => (window.innerHeight < 1000 ? 4 : 6); // fewer ideas on lower screens
-  const TIMEOUT_MS = 180_000;   // give up on a job after this long
-  const FORMATS = {
-    square: [1024, 1024],
-    portrait: [832, 1216],
-    landscape: [1216, 832],
-  };
+  // ---------- Fixed values ----------
+  const IDLE_COUNTDOWN = 10;    // seconds in "Bist du noch da?"
+  const TIMEOUT_MS = 240_000;   // give up on a job after this long
+  const FACT_MS = 6000;         // how long each "Wusstest du?" stays
+  const SAVER_MS = 7000;        // how long each screensaver image stays
+  const STATUS_MS = 5000;       // status polling
+  const FORMATS = { square: [1024, 1024], portrait: [832, 1216], landscape: [1216, 832] };
+  const STYLES = [
+    ['foto', 'Foto'], ['comic', 'Comic'], ['aquarell', 'Aquarell'], ['oel', 'Ölbild'],
+    ['pixel', 'Pixel-Art'], ['bausteine', 'Bausteine'], ['skizze', 'Skizze'], ['render', '3D'],
+  ];
+  const SAMPLERS = ['euler', 'er_sde', 'dpmpp_2m', 'euler_ancestral', 'heun'];
   // Node ids in workflow.json
   const NODE_UPSAMPLER = '11';
+  const NODE_ENCODE = '4';
   const NODE_SAMPLER = '7';
   const NODE_DECODE = '8';
   const NODE_IMAGE = '9';
@@ -21,46 +24,132 @@
   // ---------- Elements ----------
   const $ = (id) => document.getElementById(id);
   const el = {
+    counter: $('counter'), logo: document.querySelector('.logo'),
     prompt: $('prompt'), field: $('field'), clear: $('clear'), error: $('error'),
-    ideas: $('ideas'), shuffle: $('shuffle'), generate: $('generate'),
-    stage: $('stage'), intro: $('intro'), canvas: $('canvas'), frame: $('frame'), image: $('image'),
-    caption: $('caption'), captionText: $('captionText'),
+    ideas: $('ideas'), shuffle: $('shuffle'), dice: $('dice'), styles: $('styles'),
+    formats: $('formats'), counts: $('counts'), openPro: $('openPro'), generate: $('generate'),
+    stage: $('stage'), offline: $('offline'), intro: $('intro'), canvas: $('canvas'), frame: $('frame'),
+    image: $('image'), grid: $('grid'),
+    caption: $('caption'), captionText: $('captionText'), tech: $('tech'), techList: $('techList'),
     progress: $('progress'), progressLabel: $('progressLabel'), progressDetail: $('progressDetail'),
     bar: document.querySelector('.bar'), barFill: $('barFill'), cancel: $('cancel'),
-    actions: $('actions'), again: $('again'), showCaption: $('showCaption'), restart: $('restart'),
+    fact: $('fact'), factTitle: $('factTitle'), factText: $('factText'),
+    actions: $('actions'), again: $('again'), showAll: $('showAll'), showCaption: $('showCaption'),
+    showTech: $('showTech'), restart: $('restart'),
     idle: $('idle'), idleCount: $('idleCount'),
-    formatButtons: [...document.querySelectorAll('[data-format]')],
+    saver: $('saver'), saverA: $('saverA'), saverB: $('saverB'), saverPrompt: $('saverPrompt'),
+    pro: $('pro'), proSteps: $('proSteps'), seedMode: $('seedMode'), seedFixed: $('seedFixed'),
+    proSeed: $('proSeed'), proSeedDice: $('proSeedDice'), proSampler: $('proSampler'),
+    proUpsampler: $('proUpsampler'), proReset: $('proReset'),
+    admin: $('admin'), adminStatus: $('adminStatus'), adminMsg: $('adminMsg'), adminSave: $('adminSave'),
+    adminSaver: $('adminSaver'), adminReload: $('adminReload'),
+    aSteps: $('aSteps'), aIdle: $('aIdle'), aSaver: $('aSaver'), aMaxVariants: $('aMaxVariants'),
+    aUpsampler: $('aUpsampler'), aShowRecent: $('aShowRecent'), aAllowAdvanced: $('aAllowAdvanced'),
     phases: [...document.querySelectorAll('[data-phase]')],
   };
 
   const clientId = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
 
+  // ---------- State ----------
+  let settings = { steps: 16, upsampler: true, maxVariants: 4, idleSeconds: 60, screensaverSeconds: 30, showRecent: true, allowAdvanced: true };
+  let status = { comfy: true, gpu: null, queue: null, imagesToday: 0, recentCount: 0 };
   let state = 'idle';           // idle | generating | result
   let format = 'square';
-  let job = null;               // { id, prompt, format, started, timer, poll, done }
-  let ignoredIds = new Set();   // cancelled jobs
+  let count = 1;
+  let style = null;
+  let advanced = defaultAdvanced();
+  let job = null;
+  const ignoredIds = new Set(); // cancelled jobs
   let previewUrl = null;
   let ws = null;
 
-  // ---------- Ideas ----------
-  function renderIdeas() {
-    const pool = [...window.PROMPT_IDEAS];
-    for (let i = pool.length - 1; i > 0; i--) {
+  function defaultAdvanced() {
+    return { steps: settings.steps, seedMode: 'random', seed: '', sampler: 'euler', upsampler: settings.upsampler };
+  }
+  function advancedChanged() {
+    const d = defaultAdvanced();
+    return advanced.steps !== d.steps || advanced.seedMode !== 'random' || advanced.sampler !== d.sampler || advanced.upsampler !== d.upsampler;
+  }
+  const randomSeedValue = () => String(Math.floor(Math.random() * 1e12));
+
+  // ---------- Small helpers ----------
+  function shuffled(list) {
+    const a = [...list];
+    for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
+      [a[i], a[j]] = [a[j], a[i]];
     }
-    el.ideas.replaceChildren(...pool.slice(0, ideaCount()).map((text) => {
+    return a;
+  }
+  const pick = (list) => list[Math.floor(Math.random() * list.length)];
+  const seconds = (ms) => (ms / 1000).toFixed(1).replace('.', ',') + ' s';
+
+  function setChecked(container, value) {
+    container.querySelectorAll('[role="radio"]').forEach((b) => {
+      const v = b.dataset.value ?? b.dataset.format ?? b.dataset.count ?? b.dataset.seedmode;
+      b.setAttribute('aria-checked', String(v === String(value)));
+    });
+  }
+  function getChecked(container) {
+    const b = container.querySelector('[aria-checked="true"]');
+    return b ? b.dataset.value : null;
+  }
+
+  async function postJson(url, body) {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || 'Unbekannter Fehler');
+    return data;
+  }
+
+  // ---------- Ideas, dice, styles ----------
+  const ideaCount = () => (window.innerHeight < 1000 ? 2 : 4); // fewer ideas on lower screens
+
+  function renderIdeas() {
+    el.ideas.replaceChildren(...shuffled(window.PROMPT_IDEAS).slice(0, ideaCount()).map((text) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'idea';
       b.textContent = text;
       b.addEventListener('click', () => {
         el.prompt.value = text;
-        el.ideas.querySelectorAll('.idea').forEach((x) => x.classList.toggle('is-picked', x === b));
+        markPicked(b);
         onPromptInput();
       });
       return b;
     }));
+  }
+
+  function markPicked(button) {
+    el.ideas.querySelectorAll('.idea').forEach((x) => x.classList.toggle('is-picked', x === button));
+  }
+
+  function rollDice() {
+    const d = window.DICE;
+    el.prompt.value = `${pick(d.who)} ${pick(d.what)} ${pick(d.where)}`;
+    markPicked(null);
+    el.field.classList.remove('is-rolled');
+    void el.field.offsetWidth;
+    el.field.classList.add('is-rolled');
+    onPromptInput();
+  }
+
+  function renderStyles() {
+    el.styles.replaceChildren(...STYLES.map(([key, label]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'style';
+      b.dataset.style = key;
+      b.textContent = label;
+      b.setAttribute('aria-pressed', 'false');
+      b.addEventListener('click', () => setStyle(style === key ? null : key));
+      return b;
+    }));
+  }
+
+  function setStyle(key) {
+    style = key;
+    el.styles.querySelectorAll('.style').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === key)));
   }
 
   // ---------- Input ----------
@@ -77,7 +166,25 @@
 
   function setFormat(key) {
     format = key;
-    el.formatButtons.forEach((b) => b.setAttribute('aria-checked', String(b.dataset.format === key)));
+    setChecked(el.formats, key);
+  }
+
+  function setCount(n) {
+    count = Math.min(n, settings.maxVariants);
+    setChecked(el.counts, count);
+  }
+
+  function applySettings() {
+    el.counts.querySelectorAll('button').forEach((b) => (b.disabled = Number(b.dataset.count) > settings.maxVariants || state === 'generating'));
+    el.counts.closest('.option').hidden = settings.maxVariants <= 1;
+    if (count > settings.maxVariants) setCount(settings.maxVariants);
+    el.openPro.hidden = !settings.allowAdvanced;
+    if (!settings.allowAdvanced) advanced = defaultAdvanced();
+    updateProLink();
+  }
+
+  function updateProLink() {
+    el.openPro.classList.toggle('is-active', settings.allowAdvanced && advancedChanged());
   }
 
   // ---------- Stage ----------
@@ -88,18 +195,35 @@
     el.canvas.hidden = next === 'idle';
     el.progress.hidden = next !== 'generating';
     el.actions.hidden = next !== 'result';
-    el.generate.disabled = next === 'generating';
-    el.prompt.readOnly = next === 'generating';
-    el.formatButtons.forEach((b) => (b.disabled = next === 'generating'));
-    if (next !== 'result') hideCaption();
-    el.showCaption.hidden = !el.captionText.textContent;
-    requestAnimationFrame(fitImage);
+    const busy = next === 'generating';
+    el.generate.disabled = busy || !status.comfy;
+    el.prompt.readOnly = busy;
+    document.querySelectorAll('#formats button, .style, #dice, #shuffle, .idea, #openPro').forEach((b) => (b.disabled = busy));
+    applySettings();
+    if (next !== 'result') closeOverlays();
+    if (next !== 'generating') stopFacts();
+    requestAnimationFrame(fitFrame);
   }
 
-  // Size the image box to the chosen format inside the free stage area.
-  function fitImage() {
+  // Grid shape for several results: 2 landscape images stack, 2 others sit side by side, 4 make 2x2.
+  function gridShape(n, fmt) {
+    if (n === 4) return [2, 2];
+    if (n === 2) return fmt === 'landscape' ? [1, 2] : [2, 1];
+    return [1, 1];
+  }
+
+  // Size the frame to the image (or grid) inside the free stage area.
+  function fitFrame() {
     if (el.canvas.hidden) return;
-    const [w, h] = FORMATS[(job && job.format) || format];
+    const fmt = (job && job.format) || format;
+    let [w, h] = FORMATS[fmt];
+    if (!el.grid.hidden && job) {
+      const [cols, rows] = gridShape(job.images.length, fmt);
+      w *= cols;
+      h *= rows;
+      el.grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      el.grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+    }
     const box = el.canvas.getBoundingClientRect();
     if (!box.width || !box.height) return;
     const scale = Math.min(box.width / w, box.height / h);
@@ -109,17 +233,28 @@
 
   function showPlaceholder(fmt) {
     const [w, h] = FORMATS[fmt];
-    setImage(`data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="#80C1DA"/></svg>`)}`, 'is-preview');
+    setImage(`data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="#80C1DA"/></svg>`)}`);
   }
 
-  function setImage(src, cls) {
+  function setImage(src) {
     el.image.src = src;
-    el.image.className = cls || '';
   }
 
-  function hideCaption() {
+  function closeOverlays() {
     el.caption.hidden = true;
+    el.tech.hidden = true;
     el.showCaption.setAttribute('aria-pressed', 'false');
+    el.showTech.setAttribute('aria-pressed', 'false');
+  }
+
+  function toggleOverlay(which) {
+    const box = which === 'caption' ? el.caption : el.tech;
+    const open = box.hidden;
+    closeOverlays();
+    if (!open) return;
+    if (which === 'tech') renderTech();
+    box.hidden = false;
+    (which === 'caption' ? el.showCaption : el.showTech).setAttribute('aria-pressed', 'true');
   }
 
   function setProgress(label, detail, fraction, activePhase) {
@@ -134,41 +269,89 @@
       p.classList.toggle('is-active', i === idx);
       p.classList.toggle('is-done', idx >= 0 && i < idx);
     });
+    const textPhase = el.phases.find((p) => p.dataset.phase === 'text');
+    textPhase.hidden = !!(job && job.info && !job.info.upsampler);
+  }
+
+  // ---------- "Wusstest du?" ----------
+  let factTimer = null;
+  let factQueues = { ai: [], school: [] };
+  let factTurn = 'school';
+
+  function nextFact() {
+    factTurn = factTurn === 'ai' ? 'school' : 'ai';
+    if (!factQueues[factTurn].length) factQueues[factTurn] = shuffled(window.FACTS[factTurn]);
+    return { kind: factTurn, text: factQueues[factTurn].pop() };
+  }
+
+  function showFact(animate) {
+    const f = nextFact();
+    const apply = () => {
+      el.factTitle.textContent = 'Wusstest du?';
+      el.factText.textContent = f.text;
+      el.fact.classList.remove('is-fading');
+    };
+    if (!animate) return apply();
+    el.fact.classList.add('is-fading');
+    setTimeout(apply, 400);
+  }
+
+  function startFacts() {
+    stopFacts();
+    showFact(false);
+    factTimer = setInterval(() => showFact(true), FACT_MS);
+  }
+  function stopFacts() {
+    clearInterval(factTimer);
+    factTimer = null;
   }
 
   // ---------- Generate ----------
   async function generate(prompt) {
     prompt = (prompt || '').trim();
     if (!prompt) {
-      showError('Schreib zuerst, was auf dem Bild sein soll.');
+      showError('Schreib zuerst, was auf dem Bild sein soll, oder tippe auf «Würfeln».');
+      return;
+    }
+    if (!status.comfy) {
+      showError('Der Bildgenerator ist gerade nicht erreichbar. Bitte melde dich beim Stand.');
       return;
     }
     showError('');
     el.prompt.blur();
-    el.captionText.textContent = '';
+    el.captionText.replaceChildren();
+    el.grid.hidden = true;
+    el.grid.replaceChildren();
 
-    job = { id: null, prompt, format, started: false, done: false };
+    job = {
+      id: null, prompt, format, count, style, info: null, images: [], selected: 0,
+      started: false, done: false, tokens: 0, caption: '',
+      t: { start: 0, textStart: 0, textEnd: 0, imageStart: 0, imageEnd: 0, end: 0 },
+    };
     setState('generating');
     showPlaceholder(format);
     setProgress('Auftrag wird gesendet', '', null, null);
+    startFacts();
 
     job.timer = setTimeout(() => failJob('Das hat zu lange gedauert.'), TIMEOUT_MS);
     job.poll = setInterval(pollHistory, 2000);
 
+    const current = job;
+    const adv = settings.allowAdvanced
+      ? { steps: advanced.steps, sampler: advanced.sampler, upsampler: advanced.upsampler, seed: advanced.seedMode === 'fixed' && advanced.seed !== '' ? Number(advanced.seed) : null }
+      : null;
     try {
-      const r = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, format, clientId }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Unbekannter Fehler');
-      if (job && !job.done) {
-        job.id = data.promptId;
-        if (!job.started) setProgress('In der Warteschlange', 'gleich geht es los', null, null);
+      const data = await postJson('/api/generate', { prompt, format, style, variants: count, advanced: adv, clientId });
+      if (current !== job || current.done) {
+        ignoredIds.add(data.promptId);
+        fetch('/api/cancel/' + data.promptId, { method: 'POST' }).catch(() => {});
+        return;
       }
+      job.id = data.promptId;
+      job.info = data.info;
+      if (!job.started) setProgress('In der Warteschlange', 'gleich geht es los', null, null);
     } catch (e) {
-      failJob(e.message);
+      if (current === job) failJob(e.message);
     }
   }
 
@@ -188,8 +371,8 @@
     showError(`Das hat leider nicht geklappt: ${msg} Versuch es nochmal oder frag beim Stand nach.`);
   }
 
-  async function cancelJob() {
-    if (!job) return;
+  function cancelJob() {
+    if (!job || job.done) return;
     const id = job.id;
     if (id) ignoredIds.add(id);
     endJob();
@@ -198,29 +381,129 @@
     if (id) fetch('/api/cancel/' + id, { method: 'POST' }).catch(() => {});
   }
 
-  function finishJob(imageInfo) {
-    if (!job || job.done) return;
+  const viewUrl = (img) => '/comfy/view?' + new URLSearchParams({ filename: img.filename, subfolder: img.subfolder || '', type: img.type || 'temp' });
+
+  function finishJob(images) {
+    if (!job || job.done || !images || !images.length) return;
     endJob();
-    const q = new URLSearchParams({ filename: imageInfo.filename, subfolder: imageInfo.subfolder || '', type: imageInfo.type || 'temp' });
-    const img = new Image();
-    img.onload = () => {
-      setImage(img.src, '');
+    const current = job;
+    current.t.end = performance.now();
+    if (!current.t.imageEnd) current.t.imageEnd = current.t.end;
+    current.images = images.map(viewUrl);
+
+    // Load all images before showing them, so nothing pops in.
+    Promise.all(current.images.map((src) => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = src;
+    }))).then(() => {
+      if (current !== job) return;
       if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
       setProgress('Fertig', '', 1, 'done');
-      setState('result');
+      showResult();
       bumpActivity();
-    };
-    img.onerror = () => { job.done = false; failJob('Das Bild konnte nicht geladen werden.'); };
-    img.src = '/comfy/view?' + q;
+      postJson('/api/done', { promptId: current.id, prompt: current.prompt })
+        .then((d) => updateCounter(d.imagesToday))
+        .catch(() => {});
+    }).catch(() => {
+      current.done = false;
+      failJob('Das Bild konnte nicht geladen werden.');
+    });
+  }
+
+  function showResult() {
+    if (job.images.length > 1) {
+      el.grid.replaceChildren(...job.images.map((src, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('aria-label', `Bild ${i + 1} gross anzeigen`);
+        const img = document.createElement('img');
+        img.src = src;
+        img.alt = '';
+        const n = document.createElement('span');
+        n.textContent = i + 1;
+        b.append(img, n);
+        b.addEventListener('click', () => showSingle(i));
+        return b;
+      }));
+      showGrid();
+    } else {
+      setImage(job.images[0]);
+      el.grid.hidden = true;
+      el.showAll.hidden = true;
+    }
+    el.showCaption.hidden = !job.caption;
+    setState('result');
+  }
+
+  function showGrid() {
+    el.grid.hidden = false;
+    el.showAll.hidden = true;
+    closeOverlays();
+    requestAnimationFrame(fitFrame);
+  }
+
+  function showSingle(i) {
+    job.selected = i;
+    setImage(job.images[i]);
+    el.grid.hidden = true;
+    el.showAll.hidden = false;
+    requestAnimationFrame(fitFrame);
   }
 
   function setCaption(text) {
-    if (!text) return;
-    el.captionText.textContent = text;
-    const note = document.createElement('span');
+    if (!text || !job) return;
+    job.caption = text;
+    const p = document.createElement('p');
+    p.textContent = text;
+    const note = document.createElement('p');
     note.className = 'lang';
     note.textContent = 'Die Beschreibung ist auf Englisch, weil das Bildmodell Englisch am besten versteht.';
-    el.captionText.append(note);
+    el.captionText.replaceChildren(p, note);
+  }
+
+  function renderTech() {
+    if (!job || !job.info) return;
+    const i = job.info;
+    const t = job.t;
+    const rows = [];
+    const add = (term, value) => rows.push([term, value]);
+    add('Bildmodell', i.model);
+    add('Text-Encoder', i.textEncoder);
+    add('Sprachmodell', i.languageModel || 'aus (Text direkt ans Bildmodell)');
+    add('Auflösung', `${i.width} × ${i.height} Pixel` + (i.variants > 1 ? `, ${i.variants} Bilder` : ''));
+    add('Schritte', `${i.steps}, Sampler ${i.sampler}`);
+    add('Seed', String(i.seed) + (i.variants > 1 ? ` (alle ${i.variants} Bilder in einem Durchgang)` : ''));
+    if (job.tokens) add('Textbausteine', `${job.tokens} Tokens geschrieben`);
+    const parts = [];
+    if (i.upsampler && t.textStart && t.textEnd) parts.push(`Beschreibung ${seconds(t.textEnd - t.textStart)}`);
+    if (t.imageStart && t.imageEnd) parts.push(`Bild ${seconds(t.imageEnd - t.imageStart)}`);
+    if (t.start && t.end) parts.push(`gesamt ${seconds(t.end - t.start)}`);
+    if (parts.length) add('Dauer', parts.join(' · '));
+    if (status.gpu) add('Grafikkarte', status.gpu.name + (status.gpu.vramTotal ? `, ${Math.round(status.gpu.vramTotal / 2 ** 30)} GB Speicher` : ''));
+
+    el.techList.replaceChildren(...rows.flatMap(([term, value]) => {
+      const dt = document.createElement('dt');
+      dt.textContent = term;
+      const dd = document.createElement('dd');
+      dd.textContent = value;
+      if (term === 'Seed' && settings.allowAdvanced) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'link-btn';
+        b.textContent = 'Seed übernehmen';
+        b.addEventListener('click', () => {
+          advanced.seedMode = 'fixed';
+          advanced.seed = String(i.seed);
+          updateProLink();
+          b.textContent = 'Übernommen';
+          b.disabled = true;
+        });
+        dd.append(b);
+      }
+      return [dt, dd];
+    }));
   }
 
   // Backup if the websocket drops: read the result from the history.
@@ -235,7 +518,7 @@
       const cap = entry.outputs[NODE_CAPTION];
       if (cap && cap.text) setCaption(cap.text[0]);
       const out = entry.outputs[NODE_IMAGE];
-      if (out && out.images && out.images[0]) finishJob(out.images[0]);
+      if (out && out.images) finishJob(out.images);
     } catch {}
   }
 
@@ -257,28 +540,45 @@
   function onMessage({ type, data }) {
     if (!data || !data.prompt_id || !isOurs(data.prompt_id)) return;
     if (!job.id) job.id = data.prompt_id;
+    const now = performance.now();
+    const t = job.t;
+    const textLabel = 'Die KI schreibt eine Bildbeschreibung';
+    const imageLabel = job.count > 1 ? `Die ${job.count} Bilder entstehen` : 'Das Bild entsteht';
 
     switch (type) {
       case 'execution_start':
         job.started = true;
-        setProgress('Die KI schreibt eine Bildbeschreibung', '', 0.02, 'text');
+        t.start = now;
+        setProgress(textLabel, '', 0.02, 'text');
         break;
       case 'executing':
-        if (data.node === NODE_UPSAMPLER) setProgress('Die KI schreibt eine Bildbeschreibung', '', 0.02, 'text');
-        else if (data.node === NODE_SAMPLER) setProgress('Das Bild entsteht', '', 0.4, 'image');
-        else if (data.node === NODE_DECODE) setProgress('Das Bild wird fertiggestellt', '', 0.96, 'image');
+        if (data.node === NODE_UPSAMPLER) {
+          t.textStart = now;
+          setProgress(textLabel, '', 0.02, 'text');
+        } else if (data.node === NODE_ENCODE) {
+          if (t.textStart && !t.textEnd) t.textEnd = now;
+        } else if (data.node === NODE_SAMPLER) {
+          if (t.textStart && !t.textEnd) t.textEnd = now;
+          t.imageStart = now;
+          setProgress(imageLabel, '', 0.4, 'image');
+        } else if (data.node === NODE_DECODE) {
+          t.imageEnd = now;
+          setProgress(job.count > 1 ? 'Die Bilder werden fertiggestellt' : 'Fast fertig', '', 0.96, 'image');
+        }
         break;
       case 'progress':
         if (data.node === NODE_UPSAMPLER) {
-          // Token count; captions are usually 200 to 450 tokens.
-          setProgress('Die KI schreibt eine Bildbeschreibung', `${data.value} Textbausteine`, Math.min(data.value / 420, 0.95) * 0.38 + 0.02, 'text');
+          job.tokens = data.value;
+          // Captions are usually 200 to 450 tokens.
+          setProgress(textLabel, `${data.value} Textbausteine`, Math.min(data.value / 420, 0.95) * 0.38 + 0.02, 'text');
         } else if (data.node === NODE_SAMPLER) {
-          setProgress('Das Bild entsteht', `Schritt ${data.value} von ${data.max}`, 0.4 + 0.55 * (data.value / data.max), 'image');
+          const start = job.info && !job.info.upsampler ? 0.05 : 0.4;
+          setProgress(imageLabel, `Schritt ${data.value} von ${data.max}`, start + (0.95 - start) * (data.value / data.max), 'image');
         }
         break;
       case 'executed':
         if (data.node === NODE_CAPTION && data.output && data.output.text) setCaption(data.output.text[0]);
-        if (data.node === NODE_IMAGE && data.output && data.output.images) finishJob(data.output.images[0]);
+        if (data.node === NODE_IMAGE && data.output && data.output.images) finishJob(data.output.images);
         break;
       case 'execution_error':
         console.error(data);
@@ -304,11 +604,102 @@
     const url = URL.createObjectURL(new Blob([bytes], { type: isPng ? 'image/png' : 'image/jpeg' }));
     const old = previewUrl;
     previewUrl = url;
-    setImage(url, 'is-preview');
+    setImage(url);
     if (old) setTimeout(() => URL.revokeObjectURL(old), 1000);
   }
 
-  // ---------- Inactivity reset ----------
+  // ---------- Status & counter ----------
+  function updateCounter(n) {
+    status.imagesToday = n;
+    el.counter.hidden = !n;
+    el.counter.innerHTML = '';
+    if (!n) return;
+    const strong = document.createElement('strong');
+    strong.textContent = n.toLocaleString('de-CH');
+    el.counter.append('Heute schon ', strong, n === 1 ? ' Bild erstellt' : ' Bilder erstellt');
+  }
+
+  async function refreshStatus() {
+    try {
+      const s = await (await fetch('/api/status', { cache: 'no-store' })).json();
+      const oldDefaults = defaultAdvanced();
+      const untouched = !advancedChanged();
+      status = s;
+      settings = s.settings;
+      // Follow new defaults from the staff menu unless the visitor changed them.
+      if (untouched || !settings.allowAdvanced) advanced = { ...defaultAdvanced(), seedMode: advanced.seedMode, seed: advanced.seed };
+      else if (advanced.steps === oldDefaults.steps) advanced.steps = settings.steps;
+    } catch {
+      status = { ...status, comfy: false };
+    }
+    el.offline.hidden = status.comfy;
+    el.generate.disabled = state === 'generating' || !status.comfy;
+    updateCounter(status.imagesToday || 0);
+    applySettings();
+    if (!el.admin.hidden) renderAdminStatus();
+  }
+
+  // ---------- Screensaver ----------
+  let saverOn = false;
+  let saverList = [];
+  let saverIndex = 0;
+  let saverTimer = null;
+  let saverFront = el.saverA;
+
+  async function startScreensaver() {
+    if (saverOn) return;
+    saverOn = true;
+    try {
+      const { images } = await (await fetch('/api/screensaver', { cache: 'no-store' })).json();
+      const visitors = shuffled(images.filter((i) => !i.example));
+      const examples = shuffled(images.filter((i) => i.example));
+      saverList = [];
+      while (visitors.length || examples.length) {
+        if (examples.length) saverList.push(examples.pop());
+        if (visitors.length) saverList.push(visitors.pop());
+      }
+    } catch {
+      saverList = [];
+    }
+    if (!saverOn) return;
+    if (!saverList.length) { saverOn = false; return; }
+    el.prompt.blur();
+    el.saver.hidden = false;
+    saverIndex = 0;
+    showSaverImage(0);
+    saverTimer = setInterval(() => showSaverImage(1), SAVER_MS);
+  }
+
+  function showSaverImage(step, tries = 0) {
+    if (!saverOn || tries >= saverList.length) return;
+    saverIndex = (saverIndex + step + saverList.length) % saverList.length;
+    const item = saverList[saverIndex];
+    const pre = new Image();
+    pre.onload = () => {
+      if (!saverOn) return;
+      const back = saverFront === el.saverA ? el.saverB : el.saverA;
+      back.src = item.src;
+      back.classList.remove('is-visible');
+      void back.offsetWidth;
+      back.classList.add('is-visible');
+      saverFront.classList.remove('is-visible');
+      saverFront = back;
+      el.saverPrompt.textContent = item.prompt ? `«${item.prompt}»` : '';
+    };
+    pre.onerror = () => showSaverImage(1, tries + 1); // e.g. visitor image gone after a ComfyUI restart
+    pre.src = item.src;
+  }
+
+  function stopScreensaver() {
+    if (!saverOn) return;
+    saverOn = false;
+    clearInterval(saverTimer);
+    el.saver.hidden = true;
+    el.saverA.classList.remove('is-visible');
+    el.saverB.classList.remove('is-visible');
+  }
+
+  // ---------- Inactivity ----------
   let lastActivity = Date.now();
   let idleShown = false;
 
@@ -321,15 +712,23 @@
   }
 
   function hasSession() {
-    return state === 'result' || el.prompt.value.trim() !== '' || !el.error.hidden || format !== 'square';
+    return state === 'result' || el.prompt.value.trim() !== '' || !el.error.hidden || format !== 'square'
+      || count !== 1 || style !== null || advancedChanged() || !el.pro.hidden;
   }
 
   function resetAll() {
-    if (job) cancelJob();
+    if (job && !job.done) cancelJob();
+    job = null;
     el.prompt.value = '';
     el.prompt.blur();
-    el.captionText.textContent = '';
+    el.captionText.replaceChildren();
+    el.grid.hidden = true;
+    el.grid.replaceChildren();
     setFormat('square');
+    setCount(1);
+    setStyle(null);
+    advanced = defaultAdvanced();
+    closeModal(el.pro);
     onPromptInput();
     renderIdeas();
     setState('idle');
@@ -338,13 +737,20 @@
   }
 
   setInterval(() => {
-    if (state === 'generating' || !hasSession()) {
-      lastActivity = Date.now();
+    const now = Date.now();
+    if (saverOn) return;
+    if (state === 'generating' || !el.admin.hidden) {
+      lastActivity = now;
       return;
     }
-    const idleFor = Date.now() - lastActivity;
-    if (idleFor < IDLE_MS) return;
-    const left = IDLE_COUNTDOWN - Math.floor((idleFor - IDLE_MS) / 1000);
+    const idleFor = now - lastActivity;
+    if (!hasSession()) {
+      if (settings.screensaverSeconds > 0 && idleFor > settings.screensaverSeconds * 1000) startScreensaver();
+      return;
+    }
+    const limit = settings.idleSeconds * 1000;
+    if (idleFor < limit) return;
+    const left = IDLE_COUNTDOWN - Math.floor((idleFor - limit) / 1000);
     if (left <= 0) {
       el.idle.hidden = true;
       idleShown = false;
@@ -357,15 +763,183 @@
     el.idleCount.textContent = left;
   }, 250);
 
+  // ---------- Modals ----------
+  function openModal(m) {
+    m.hidden = false;
+  }
+  function closeModal(m) {
+    m.hidden = true;
+  }
+
+  // Steppers: [data-stepper] with − / + buttons around an <output>.
+  function stepperValue(name) {
+    return Number(document.querySelector(`[data-stepper="${name}"] output`).textContent);
+  }
+  function setStepper(name, v) {
+    document.querySelector(`[data-stepper="${name}"] output`).textContent = v;
+  }
+  document.querySelectorAll('[data-stepper]').forEach((s) => {
+    s.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-step]');
+      if (!b) return;
+      const min = Number(s.dataset.min);
+      const max = Number(s.dataset.max);
+      const inc = Number(s.dataset.inc || 1);
+      const out = s.querySelector('output');
+      const v = Math.min(max, Math.max(min, Number(out.textContent) + Number(b.dataset.step) * inc));
+      out.textContent = v;
+      s.dispatchEvent(new CustomEvent('change', { detail: v }));
+    });
+  });
+
+  // Plain segment groups in the modals.
+  document.querySelectorAll('.modal .segments').forEach((g) => {
+    g.addEventListener('click', (e) => {
+      const b = e.target.closest('[role="radio"]');
+      if (!b) return;
+      g.querySelectorAll('[role="radio"]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+      g.dispatchEvent(new CustomEvent('change', { detail: b.dataset.value ?? b.dataset.seedmode }));
+    });
+  });
+
+  // ---- Visitor advanced settings ----
+  function renderPro() {
+    setStepper('steps', advanced.steps);
+    setChecked(el.seedMode, advanced.seedMode);
+    el.seedFixed.hidden = advanced.seedMode !== 'fixed';
+    el.proSeed.value = advanced.seed;
+    setChecked(el.proSampler, advanced.sampler);
+    setChecked(el.proUpsampler, advanced.upsampler);
+  }
+
+  el.proSampler.replaceChildren(...SAMPLERS.map((s) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'radio');
+    b.dataset.value = s;
+    b.textContent = s;
+    return b;
+  }));
+  el.proSampler.addEventListener('click', (e) => {
+    const b = e.target.closest('[role="radio"]');
+    if (!b) return;
+    advanced.sampler = b.dataset.value;
+    setChecked(el.proSampler, advanced.sampler);
+    updateProLink();
+  });
+
+  document.querySelector('[data-stepper="steps"]').addEventListener('change', (e) => { advanced.steps = e.detail; updateProLink(); });
+  el.seedMode.addEventListener('change', (e) => {
+    advanced.seedMode = e.detail;
+    if (advanced.seedMode === 'fixed' && !advanced.seed) advanced.seed = randomSeedValue();
+    renderPro();
+    updateProLink();
+  });
+  el.proSeed.addEventListener('input', () => {
+    el.proSeed.value = el.proSeed.value.replace(/\D/g, '');
+    advanced.seed = el.proSeed.value;
+  });
+  el.proSeedDice.addEventListener('click', () => { advanced.seed = randomSeedValue(); renderPro(); });
+  el.proUpsampler.addEventListener('change', (e) => { advanced.upsampler = e.detail === 'true'; updateProLink(); });
+  el.proReset.addEventListener('click', () => { advanced = defaultAdvanced(); renderPro(); updateProLink(); });
+  el.openPro.addEventListener('click', () => { renderPro(); openModal(el.pro); });
+
+  // ---- Staff menu ----
+  function renderAdminStatus() {
+    const rows = [
+      ['ComfyUI', status.comfy ? `erreichbar (${status.comfyUrl || ''})` : `NICHT erreichbar (${status.comfyUrl || ''})`, !status.comfy],
+      ['Grafikkarte', status.gpu ? `${status.gpu.name}, ${Math.round((status.gpu.vramFree || 0) / 2 ** 30)} von ${Math.round((status.gpu.vramTotal || 0) / 2 ** 30)} GB frei` : '–'],
+      ['Warteschlange', status.queue ? `${status.queue.running} läuft, ${status.queue.pending} wartet` : '–'],
+      ['Bilder heute', String(status.imagesToday || 0)],
+      ['Besucherbilder im Schoner', String(status.recentCount || 0)],
+      ['Verbindung Seite', ws && ws.readyState === WebSocket.OPEN ? 'Live-Verbindung steht' : 'Live-Verbindung unterbrochen', !(ws && ws.readyState === WebSocket.OPEN)],
+    ];
+    el.adminStatus.replaceChildren(...rows.flatMap(([k, v, bad]) => {
+      const dt = document.createElement('dt');
+      dt.textContent = k;
+      const dd = document.createElement('dd');
+      dd.textContent = v;
+      if (bad) dd.className = 'is-bad';
+      return [dt, dd];
+    }));
+  }
+
+  function openAdmin() {
+    setStepper('adminSteps', settings.steps);
+    setStepper('adminIdle', settings.idleSeconds);
+    setStepper('adminSaver', settings.screensaverSeconds);
+    setChecked(el.aMaxVariants, settings.maxVariants);
+    setChecked(el.aUpsampler, settings.upsampler);
+    setChecked(el.aShowRecent, settings.showRecent);
+    setChecked(el.aAllowAdvanced, settings.allowAdvanced);
+    el.adminMsg.textContent = '';
+    stopScreensaver();
+    renderAdminStatus();
+    openModal(el.admin);
+    refreshStatus();
+  }
+
+  el.adminSave.addEventListener('click', async () => {
+    try {
+      const data = await postJson('/api/settings', {
+        steps: stepperValue('adminSteps'),
+        idleSeconds: stepperValue('adminIdle'),
+        screensaverSeconds: stepperValue('adminSaver'),
+        maxVariants: Number(getChecked(el.aMaxVariants)),
+        upsampler: getChecked(el.aUpsampler) === 'true',
+        showRecent: getChecked(el.aShowRecent) === 'true',
+        allowAdvanced: getChecked(el.aAllowAdvanced) === 'true',
+      });
+      const wasDefault = !advancedChanged();
+      settings = data.settings;
+      if (wasDefault || !settings.allowAdvanced) advanced = defaultAdvanced();
+      applySettings();
+      el.adminMsg.textContent = 'Gespeichert.';
+    } catch (e) {
+      el.adminMsg.textContent = 'Speichern fehlgeschlagen: ' + e.message;
+    }
+  });
+
+  el.admin.querySelectorAll('[data-admin]').forEach((b) => b.addEventListener('click', async () => {
+    try {
+      await postJson('/api/admin/' + b.dataset.admin);
+      el.adminMsg.textContent = 'Erledigt: ' + b.textContent;
+      refreshStatus();
+    } catch (e) {
+      el.adminMsg.textContent = 'Fehlgeschlagen: ' + e.message;
+    }
+  }));
+  el.adminSaver.addEventListener('click', () => { closeModal(el.admin); startScreensaver(); });
+  el.adminReload.addEventListener('click', () => location.reload());
+
+  document.querySelectorAll('.modal [data-close]').forEach((b) => b.addEventListener('click', () => closeModal(b.closest('.modal'))));
+  document.querySelectorAll('.modal').forEach((m) => m.addEventListener('pointerdown', (e) => { if (e.target === m) closeModal(m); }));
+
   // ---------- Events ----------
   ['pointerdown', 'keydown', 'input', 'wheel'].forEach((t) => document.addEventListener(t, bumpActivity, { capture: true, passive: true }));
   el.idle.addEventListener('pointerdown', (e) => { e.preventDefault(); bumpActivity(); });
+  el.saver.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    stopScreensaver();
+    bumpActivity();
+  });
   document.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  el.prompt.addEventListener('input', () => {
-    el.ideas.querySelectorAll('.is-picked').forEach((x) => x.classList.remove('is-picked'));
-    onPromptInput();
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      if (el.admin.hidden) openAdmin();
+      else closeModal(el.admin);
+      return;
+    }
+    if (e.key === 'Escape') {
+      if (saverOn) stopScreensaver();
+      document.querySelectorAll('.modal').forEach(closeModal);
+    }
   });
+
+  el.prompt.addEventListener('input', () => { markPicked(null); onPromptInput(); });
   el.prompt.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -374,20 +948,23 @@
   });
   el.clear.addEventListener('click', () => { el.prompt.value = ''; el.prompt.focus(); onPromptInput(); });
   el.shuffle.addEventListener('click', renderIdeas);
-  el.formatButtons.forEach((b) => b.addEventListener('click', () => setFormat(b.dataset.format)));
+  el.dice.addEventListener('click', rollDice);
+  el.formats.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => setFormat(b.dataset.format)));
+  el.counts.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => setCount(Number(b.dataset.count))));
   el.generate.addEventListener('click', () => generate(el.prompt.value));
   el.cancel.addEventListener('click', cancelJob);
   el.again.addEventListener('click', () => generate(job ? job.prompt : el.prompt.value));
+  el.showAll.addEventListener('click', showGrid);
+  el.showCaption.addEventListener('click', () => toggleOverlay('caption'));
+  el.showTech.addEventListener('click', () => toggleOverlay('tech'));
   el.restart.addEventListener('click', resetAll);
-  el.showCaption.addEventListener('click', () => {
-    const open = el.caption.hidden;
-    el.caption.hidden = !open;
-    el.showCaption.setAttribute('aria-pressed', String(open));
-  });
-  window.addEventListener('resize', fitImage);
+  window.addEventListener('resize', fitFrame);
 
   // ---------- Start ----------
+  renderStyles();
   renderIdeas();
   setState('idle');
   connect();
+  refreshStatus();
+  setInterval(refreshStatus, STATUS_MS);
 })();

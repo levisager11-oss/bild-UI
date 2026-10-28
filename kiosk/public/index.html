@@ -9,7 +9,10 @@
 <body>
   <header class="topbar">
     <img class="logo" src="assets/TFBern_Logo_RGB_PNG.png" alt="Technische Fachschule Bern">
-    <span class="event">Tag der offenen Tür</span>
+    <div class="topbar-right">
+      <span class="event">Tag der offenen Tür</span>
+      <span class="counter" id="counter" hidden></span>
+    </div>
   </header>
 
   <main class="layout">
@@ -25,43 +28,71 @@
       </div>
       <p class="field-error" id="error" role="alert" hidden></p>
 
-      <div class="ideas-head">
+      <div class="row-head">
         <span class="field-label">Keine Idee? Tippe auf einen Vorschlag</span>
-        <button class="link-btn" id="shuffle" type="button">Andere Vorschläge</button>
+        <span class="row-links">
+          <button class="link-btn" id="dice" type="button">Würfeln</button>
+          <button class="link-btn" id="shuffle" type="button">Andere Vorschläge</button>
+        </span>
       </div>
       <div class="ideas" id="ideas"></div>
 
-      <div class="format" role="radiogroup" aria-label="Format">
-        <span class="field-label">Format</span>
-        <div class="segments">
-          <button type="button" role="radio" data-format="square" aria-checked="true"><i class="shape sq"></i>Quadrat</button>
-          <button type="button" role="radio" data-format="portrait" aria-checked="false"><i class="shape pt"></i>Hoch</button>
-          <button type="button" role="radio" data-format="landscape" aria-checked="false"><i class="shape ls"></i>Quer</button>
+      <div class="row-head">
+        <span class="field-label">Stil <span class="hint">(optional)</span></span>
+      </div>
+      <div class="styles" id="styles" role="group" aria-label="Stil"></div>
+
+      <div class="options">
+        <div class="option" role="radiogroup" aria-label="Format">
+          <span class="field-label">Format</span>
+          <div class="segments" id="formats">
+            <button type="button" role="radio" data-format="square" aria-checked="true"><i class="shape sq"></i>Quadrat</button>
+            <button type="button" role="radio" data-format="portrait" aria-checked="false"><i class="shape pt"></i>Hoch</button>
+            <button type="button" role="radio" data-format="landscape" aria-checked="false"><i class="shape ls"></i>Quer</button>
+          </div>
+        </div>
+        <div class="option option-count" role="radiogroup" aria-label="Anzahl Bilder">
+          <span class="field-label">Anzahl</span>
+          <div class="segments" id="counts">
+            <button type="button" role="radio" data-count="1" aria-checked="true">1</button>
+            <button type="button" role="radio" data-count="2" aria-checked="false">2</button>
+            <button type="button" role="radio" data-count="4" aria-checked="false">4</button>
+          </div>
         </div>
       </div>
+      <button class="link-btn pro-link" id="openPro" type="button">Profi-Einstellungen</button>
 
       <button class="btn btn-primary btn-xl" id="generate" type="button">Bild erstellen</button>
     </section>
 
     <section class="stage" id="stage" data-state="idle" aria-live="polite">
+      <div class="alert" id="offline" role="alert" hidden>
+        <strong>Der Bildgenerator ist gerade nicht erreichbar.</strong>
+        <span>Bitte melde dich beim Stand. Es geht gleich weiter.</span>
+      </div>
+
       <!-- Start -->
       <div class="intro tf-spickel" id="intro">
         <h2>So funktioniert's</h2>
         <ol class="steps">
           <li><b>1</b><span><strong>Du beschreibst</strong> dein Bild, auf Deutsch oder einer anderen Sprache.</span></li>
           <li><b>2</b><span><strong>Ein Sprachmodell</strong> schreibt daraus eine ausführliche Bildbeschreibung.</span></li>
-          <li><b>3</b><span><strong>Das Bildmodell</strong> malt das Bild in 16 Schritten aus reinem Rauschen.</span></li>
+          <li><b>3</b><span><strong>Das Bildmodell</strong> malt das Bild Schritt für Schritt aus reinem Rauschen.</span></li>
         </ol>
-        <p class="intro-note">Die Bilder werden nicht gespeichert.</p>
       </div>
 
       <!-- Image (preview + result) -->
       <figure class="canvas" id="canvas" hidden>
         <div class="frame" id="frame">
           <img id="image" alt="Von der KI erstelltes Bild">
-          <div class="caption tf-spickel" id="caption" hidden>
-            <p class="caption-title">So hat die KI deinen Wunsch beschrieben</p>
-            <p class="caption-text" id="captionText"></p>
+          <div class="grid" id="grid" hidden></div>
+          <div class="overlay-box tf-spickel" id="caption" hidden>
+            <p class="overlay-title">So hat die KI deinen Wunsch beschrieben</p>
+            <div class="overlay-body" id="captionText"></div>
+          </div>
+          <div class="overlay-box tf-spickel" id="tech" hidden>
+            <p class="overlay-title">Technik hinter dem Bild</p>
+            <div class="overlay-body"><dl class="tech-list" id="techList"></dl></div>
           </div>
         </div>
       </figure>
@@ -79,17 +110,21 @@
           <span data-phase="done">Fertig</span>
         </div>
         <button class="btn btn-secondary" id="cancel" type="button">Abbrechen</button>
+        <p class="fact" id="fact"><strong id="factTitle">Wusstest du?</strong> <span id="factText"></span></p>
       </div>
 
       <!-- Result actions -->
       <div class="actions" id="actions" hidden>
-        <button class="btn btn-primary" id="again" type="button">Neue Variante</button>
+        <button class="btn btn-primary" id="again" type="button">Nochmal</button>
+        <button class="btn btn-secondary" id="showAll" type="button" hidden>Alle Bilder</button>
         <button class="btn btn-secondary" id="showCaption" type="button" aria-pressed="false">Was hat die KI verstanden?</button>
+        <button class="btn btn-secondary" id="showTech" type="button" aria-pressed="false">Technik</button>
         <button class="btn btn-secondary" id="restart" type="button">Neues Bild</button>
       </div>
     </section>
   </main>
 
+  <!-- Inactivity -->
   <div class="idle-overlay" id="idle" hidden>
     <div class="idle-box tf-spickel">
       <h2>Bist du noch da?</h2>
@@ -97,7 +132,154 @@
     </div>
   </div>
 
+  <!-- Screensaver -->
+  <div class="saver" id="saver" hidden>
+    <img class="saver-img" id="saverA" alt="">
+    <img class="saver-img" id="saverB" alt="">
+    <div class="saver-logo"><img src="assets/TFBern_Logo_RGB_PNG.png" alt="Technische Fachschule Bern"></div>
+    <div class="saver-box tf-spickel">
+      <p class="saver-eyebrow">KI-Bildgenerator</p>
+      <h2>Was soll die KI für dich malen?</h2>
+      <p>Tippe irgendwo hin und erstelle dein eigenes Bild.</p>
+      <p class="saver-prompt" id="saverPrompt"></p>
+    </div>
+  </div>
+
+  <!-- Visitor advanced settings -->
+  <div class="modal" id="pro" hidden role="dialog" aria-modal="true" aria-labelledby="proTitle">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2 id="proTitle">Profi-Einstellungen</h2>
+        <button class="btn btn-secondary" type="button" data-close>Fertig</button>
+      </div>
+      <div class="modal-body">
+        <div class="setting">
+          <div class="setting-text">
+            <span class="setting-name">Schritte</span>
+            <span class="setting-help">So oft entfernt das Bildmodell Rauschen. Mehr Schritte geben mehr Feinschliff, dauern aber länger. Probier mal 4 und 30.</span>
+          </div>
+          <div class="stepper" data-stepper="steps" data-min="4" data-max="40">
+            <button type="button" data-step="-1" aria-label="Weniger">−</button>
+            <output id="proSteps">16</output>
+            <button type="button" data-step="1" aria-label="Mehr">+</button>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-text">
+            <span class="setting-name">Seed</span>
+            <span class="setting-help">Die Startzahl für das Rauschen. Gleicher Text und gleicher Seed ergeben dasselbe Bild.</span>
+          </div>
+          <div class="seed-ctrl">
+            <div class="segments" id="seedMode">
+              <button type="button" role="radio" data-seedmode="random" aria-checked="true">Zufall</button>
+              <button type="button" role="radio" data-seedmode="fixed" aria-checked="false">Fest</button>
+            </div>
+            <div class="seed-fixed" id="seedFixed" hidden>
+              <input id="proSeed" type="text" inputmode="numeric" maxlength="15" autocomplete="off" aria-label="Seed">
+              <button class="btn btn-secondary" id="proSeedDice" type="button">Würfeln</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-text">
+            <span class="setting-name">Sampler</span>
+            <span class="setting-help">Der Rechenweg, mit dem das Rauschen Schritt für Schritt entfernt wird.</span>
+          </div>
+          <div class="segments segments-wrap" id="proSampler"></div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-text">
+            <span class="setting-name">Prompt-Verbesserer</span>
+            <span class="setting-help">Aus: Dein Text geht direkt ans Bildmodell, ohne Sprachmodell. Schreib dann am besten auf Englisch.</span>
+          </div>
+          <div class="segments" id="proUpsampler">
+            <button type="button" role="radio" data-value="true" aria-checked="true">An</button>
+            <button type="button" role="radio" data-value="false" aria-checked="false">Aus</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="link-btn" id="proReset" type="button">Alles zurücksetzen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Staff menu: Ctrl+Alt+B -->
+  <div class="modal" id="admin" hidden role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+    <div class="modal-box modal-wide">
+      <div class="modal-head">
+        <h2 id="adminTitle">Betreuer-Menü</h2>
+        <button class="btn btn-secondary" type="button" data-close>Schliessen</button>
+      </div>
+      <div class="modal-body admin-grid">
+        <section>
+          <h3>Status</h3>
+          <dl class="status-list" id="adminStatus"></dl>
+          <h3>Aktionen</h3>
+          <div class="admin-actions">
+            <button class="btn btn-secondary" type="button" data-admin="clear-queue">Warteschlange leeren</button>
+            <button class="btn btn-secondary" type="button" data-admin="clear-recent">Besucherbilder aus Schoner entfernen</button>
+            <button class="btn btn-secondary" type="button" data-admin="reset-counter">Bildzähler zurücksetzen</button>
+            <button class="btn btn-secondary" type="button" id="adminSaver">Bildschirmschoner testen</button>
+            <button class="btn btn-secondary" type="button" id="adminReload">Seite neu laden</button>
+          </div>
+          <p class="admin-msg" id="adminMsg" role="status"></p>
+        </section>
+        <section>
+          <h3>Einstellungen</h3>
+          <div class="admin-settings">
+            <div class="admin-row"><span>Schritte (Standard)</span>
+              <div class="stepper" data-stepper="adminSteps" data-min="4" data-max="40">
+                <button type="button" data-step="-1" aria-label="Weniger">−</button><output id="aSteps">16</output><button type="button" data-step="1" aria-label="Mehr">+</button>
+              </div>
+            </div>
+            <div class="admin-row"><span>Max. Anzahl Bilder</span>
+              <div class="segments" id="aMaxVariants">
+                <button type="button" role="radio" data-value="1">1</button>
+                <button type="button" role="radio" data-value="2">2</button>
+                <button type="button" role="radio" data-value="4">4</button>
+              </div>
+            </div>
+            <div class="admin-row"><span>Auto-Reset nach (Sekunden)</span>
+              <div class="stepper" data-stepper="adminIdle" data-min="20" data-max="600" data-inc="10">
+                <button type="button" data-step="-1" aria-label="Weniger">−</button><output id="aIdle">60</output><button type="button" data-step="1" aria-label="Mehr">+</button>
+              </div>
+            </div>
+            <div class="admin-row"><span>Bildschirmschoner nach (Sekunden, 0 = aus)</span>
+              <div class="stepper" data-stepper="adminSaver" data-min="0" data-max="600" data-inc="10">
+                <button type="button" data-step="-1" aria-label="Weniger">−</button><output id="aSaver">30</output><button type="button" data-step="1" aria-label="Mehr">+</button>
+              </div>
+            </div>
+            <div class="admin-row"><span>Prompt-Verbesserer (Standard)</span>
+              <div class="segments" id="aUpsampler">
+                <button type="button" role="radio" data-value="true">An</button>
+                <button type="button" role="radio" data-value="false">Aus</button>
+              </div>
+            </div>
+            <div class="admin-row"><span>Besucherbilder im Schoner</span>
+              <div class="segments" id="aShowRecent">
+                <button type="button" role="radio" data-value="true">An</button>
+                <button type="button" role="radio" data-value="false">Aus</button>
+              </div>
+            </div>
+            <div class="admin-row"><span>Profi-Einstellungen für Besucher</span>
+              <div class="segments" id="aAllowAdvanced">
+                <button type="button" role="radio" data-value="true">An</button>
+                <button type="button" role="radio" data-value="false">Aus</button>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-primary" id="adminSave" type="button">Einstellungen speichern</button>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <script src="ideas.js"></script>
+  <script src="facts.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

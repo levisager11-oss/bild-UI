@@ -1,0 +1,50 @@
+[
+  {
+    "file": "beispiel-01.jpg",
+    "prompt": "Ein Roboter, der in einer Werkstatt ein Velo repariert"
+  },
+  {
+    "file": "beispiel-02.jpg",
+    "prompt": "Der Zytglogge in Bern als Raumschiff kurz vor dem Start"
+  },
+  {
+    "file": "beispiel-03.jpg",
+    "prompt": "Eine Katze mit Schweisshelm, die eine Metallskulptur schweisst"
+  },
+  {
+    "file": "beispiel-04.jpg",
+    "prompt": "Ein Bär, der in einem Büro in Bern am Laptop programmiert"
+  },
+  {
+    "file": "beispiel-05.jpg",
+    "prompt": "Eine Stadt der Zukunft mit Solardächern und Seilbahnen"
+  },
+  {
+    "file": "beispiel-06.jpg",
+    "prompt": "Ein Drache aus Zahnrädern fliegt über die Aare"
+  },
+  {
+    "file": "beispiel-07.jpg",
+    "prompt": "Ein Astronaut grilliert Würste auf dem Mond"
+  },
+  {
+    "file": "beispiel-08.jpg",
+    "prompt": "Ein Zug aus Spielzeugbausteinen fährt durch die Alpen"
+  },
+  {
+    "file": "beispiel-09.jpg",
+    "prompt": "Eine Leiterplatte, die von oben wie eine Stadt aussieht"
+  },
+  {
+    "file": "beispiel-10.jpg",
+    "prompt": "Ein Wasserkraftwerk in den Bergen"
+  },
+  {
+    "file": "beispiel-11.jpg",
+    "prompt": "Ein Fuchs mit Schutzbrille an einer Drehbank"
+  },
+  {
+    "file": "beispiel-12.jpg",
+    "prompt": "Eine gemütliche Schreinerei im Morgenlicht"
+  }
+]

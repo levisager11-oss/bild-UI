@@ -21,3 +21,21 @@ window.PROMPT_IDEAS = [
   'Eine Bibliothek in einem alten Baum',
   'Ein Wasserkraftwerk in den Bergen als Aquarell',
 ];
+
+// Building blocks for the dice: who + does what + where.
+window.DICE = {
+  who: [
+    'Ein Pinguin', 'Ein Roboter', 'Eine Katze', 'Ein Bär', 'Ein Dinosaurier', 'Eine Schnecke',
+    'Ein Astronaut', 'Ein Fuchs', 'Ein Lama', 'Ein Igel', 'Eine Kuh', 'Ein Oktopus',
+  ],
+  what: [
+    'repariert ein Velo', 'schweisst eine Skulptur', 'lötet eine Leiterplatte', 'baut ein Baumhaus',
+    'kocht Fondue', 'fährt Snowboard', 'malt ein Bild', 'spielt Schach', 'fliegt einen Heissluftballon',
+    'programmiert einen Roboter', 'montiert Solarpanels', 'hobelt ein Brett',
+  ],
+  where: [
+    'auf dem Bundesplatz in Bern', 'in einer Schreinerei', 'auf dem Mond', 'unter Wasser',
+    'in einer Werkstatt voller Zahnräder', 'auf dem Gurten', 'im Dschungel', 'in einer Stadt der Zukunft',
+    'an der Aare', 'auf einem Gletscher', 'in einem Labor', 'auf einem Hausdach',
+  ],
+};
