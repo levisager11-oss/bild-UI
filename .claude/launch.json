@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kiosk",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["kiosk/server.js"],
+      "port": 8080
+    }
+  ]
+}

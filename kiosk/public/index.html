@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="de-CH">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KI-Bildgenerator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <img class="logo" src="assets/TFBern_Logo_RGB_PNG.png" alt="Technische Fachschule Bern">
+    <span class="event">Tag der offenen Tür</span>
+  </header>
+
+  <main class="layout">
+    <section class="panel" aria-label="Eingabe">
+      <p class="eyebrow">KI-Bildgenerator</p>
+      <h1>Was soll die KI für dich malen?</h1>
+      <p class="lead">Beschreibe dein Bild in ein paar Worten. Die KI macht daraus in wenigen Sekunden ein Bild.</p>
+
+      <label class="field-label" for="prompt">Deine Beschreibung</label>
+      <div class="field" id="field">
+        <textarea id="prompt" rows="3" maxlength="400" placeholder="z.B. Ein Roboter, der in einer Werkstatt ein Velo repariert" autocomplete="off" spellcheck="false"></textarea>
+        <button class="clear" id="clear" type="button" aria-label="Text löschen" hidden>Löschen</button>
+      </div>
+      <p class="field-error" id="error" role="alert" hidden></p>
+
+      <div class="ideas-head">
+        <span class="field-label">Keine Idee? Tippe auf einen Vorschlag</span>
+        <button class="link-btn" id="shuffle" type="button">Andere Vorschläge</button>
+      </div>
+      <div class="ideas" id="ideas"></div>
+
+      <div class="format" role="radiogroup" aria-label="Format">
+        <span class="field-label">Format</span>
+        <div class="segments">
+          <button type="button" role="radio" data-format="square" aria-checked="true"><i class="shape sq"></i>Quadrat</button>
+          <button type="button" role="radio" data-format="portrait" aria-checked="false"><i class="shape pt"></i>Hoch</button>
+          <button type="button" role="radio" data-format="landscape" aria-checked="false"><i class="shape ls"></i>Quer</button>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-xl" id="generate" type="button">Bild erstellen</button>
+    </section>
+
+    <section class="stage" id="stage" data-state="idle" aria-live="polite">
+      <!-- Start -->
+      <div class="intro tf-spickel" id="intro">
+        <h2>So funktioniert's</h2>
+        <ol class="steps">
+          <li><b>1</b><span><strong>Du beschreibst</strong> dein Bild, auf Deutsch oder einer anderen Sprache.</span></li>
+          <li><b>2</b><span><strong>Ein Sprachmodell</strong> schreibt daraus eine ausführliche Bildbeschreibung.</span></li>
+          <li><b>3</b><span><strong>Das Bildmodell</strong> malt das Bild in 16 Schritten aus reinem Rauschen.</span></li>
+        </ol>
+        <p class="intro-note">Die Bilder werden nicht gespeichert.</p>
+      </div>
+
+      <!-- Image (preview + result) -->
+      <figure class="canvas" id="canvas" hidden>
+        <div class="frame" id="frame">
+          <img id="image" alt="Von der KI erstelltes Bild">
+          <div class="caption tf-spickel" id="caption" hidden>
+            <p class="caption-title">So hat die KI deinen Wunsch beschrieben</p>
+            <p class="caption-text" id="captionText"></p>
+          </div>
+        </div>
+      </figure>
+
+      <!-- Progress -->
+      <div class="progress" id="progress" hidden>
+        <div class="progress-row">
+          <span class="progress-label" id="progressLabel">Wird vorbereitet</span>
+          <span class="progress-detail" id="progressDetail"></span>
+        </div>
+        <div class="bar"><div class="bar-fill" id="barFill"></div></div>
+        <div class="phases">
+          <span data-phase="text">Beschreibung</span>
+          <span data-phase="image">Bild malen</span>
+          <span data-phase="done">Fertig</span>
+        </div>
+        <button class="btn btn-secondary" id="cancel" type="button">Abbrechen</button>
+      </div>
+
+      <!-- Result actions -->
+      <div class="actions" id="actions" hidden>
+        <button class="btn btn-primary" id="again" type="button">Neue Variante</button>
+        <button class="btn btn-secondary" id="showCaption" type="button" aria-pressed="false">Was hat die KI verstanden?</button>
+        <button class="btn btn-secondary" id="restart" type="button">Neues Bild</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="idle-overlay" id="idle" hidden>
+    <div class="idle-box tf-spickel">
+      <h2>Bist du noch da?</h2>
+      <p>Tippe irgendwo hin, um weiterzumachen. Sonst startet alles in <span id="idleCount">10</span> Sekunden neu.</p>
+    </div>
+  </div>
+
+  <script src="ideas.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
