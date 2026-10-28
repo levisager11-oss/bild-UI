@@ -41,7 +41,8 @@
     pro: $('pro'), proSteps: $('proSteps'), seedMode: $('seedMode'), seedFixed: $('seedFixed'),
     proSeed: $('proSeed'), proSeedDice: $('proSeedDice'), proSampler: $('proSampler'),
     proUpsampler: $('proUpsampler'), proResearch: $('proResearch'), proResearchRow: $('proResearchRow'), proReset: $('proReset'),
-    aResearch: $('aResearch'),
+    proReference: $('proReference'), proReferenceRow: $('proReferenceRow'),
+    aResearch: $('aResearch'), aReference: $('aReference'),
     admin: $('admin'), adminStatus: $('adminStatus'), adminMsg: $('adminMsg'), adminSave: $('adminSave'),
     adminSaver: $('adminSaver'), adminReload: $('adminReload'),
     aSteps: $('aSteps'), aIdle: $('aIdle'), aSaver: $('aSaver'), aMaxVariants: $('aMaxVariants'),
@@ -65,16 +66,19 @@
   let ws = null;
 
   function defaultAdvanced() {
-    return { steps: settings.steps, seedMode: 'random', seed: '', sampler: 'euler', upsampler: settings.upsampler, research: true };
+    return { steps: settings.steps, seedMode: 'random', seed: '', sampler: 'euler', upsampler: settings.upsampler, research: true, reference: true };
   }
   function advancedChanged() {
     const d = defaultAdvanced();
     return advanced.steps !== d.steps || advanced.seedMode !== 'random' || advanced.sampler !== d.sampler
-      || advanced.upsampler !== d.upsampler || advanced.research !== d.research;
+      || advanced.upsampler !== d.upsampler || advanced.research !== d.research || advanced.reference !== d.reference;
   }
-  // Research runs only if ask is set up, the staff menu allows it and the visitor did not switch it off.
-  const researchAvailable = () => !!(status.ask && status.ask.configured && settings.research);
+  // Research and reference photos need ask, must be allowed in the staff menu and not switched off by the visitor.
+  const askReady = () => !!(status.ask && status.ask.configured);
+  const researchAvailable = () => askReady() && settings.research;
+  const referenceAvailable = () => askReady() && settings.reference;
   const researchWanted = () => researchAvailable() && (!settings.allowAdvanced || advanced.research);
+  const referenceWanted = () => referenceAvailable() && (!settings.allowAdvanced || advanced.reference);
   const randomSeedValue = () => String(Math.floor(Math.random() * 1e12));
 
   // ---------- Small helpers ----------
@@ -281,7 +285,7 @@
 
   // Share of the progress bar for each phase, depending on which phases run.
   function frac(phase, f) {
-    const r = job && job.researchQuery;
+    const r = job && job.preparing;
     const up = !job || job.upsampler;
     const start = r ? 0.2 : 0.02;
     const spans = {
@@ -350,7 +354,7 @@
       id: null, prompt, format, count, style, info: null, images: [], selected: 0,
       started: false, done: false, tokens: 0, caption: '',
       upsampler: adv ? adv.upsampler : settings.upsampler,
-      showResearch: false, researchQuery: '', research: null, abort: new AbortController(),
+      showResearch: false, researchQuery: '', research: null, reference: null, abort: new AbortController(),
       t: { start: 0, researchStart: 0, researchEnd: 0, textStart: 0, textEnd: 0, imageStart: 0, imageEnd: 0, end: 0 },
     };
     setState('generating');
@@ -364,10 +368,13 @@
     const current = job;
     const stillCurrent = () => current === job && !current.done;
     try {
-      if (researchWanted()) await research(current);
+      if (researchWanted() || referenceWanted()) await research(current);
       if (!stillCurrent()) return;
       const facts = current.research ? current.research.facts : null;
-      const data = await postJson('/api/generate', { prompt, format, style, variants: count, advanced: adv, facts, clientId });
+      const reference = current.reference
+        ? { name: current.reference.name, subject: current.reference.subject, transform: current.reference.transform }
+        : null;
+      const data = await postJson('/api/generate', { prompt, format, style, variants: count, advanced: adv, facts, reference, clientId });
       if (current !== job || current.done) {
         ignoredIds.add(data.promptId);
         fetch('/api/cancel/' + data.promptId, { method: 'POST' }).catch(() => {});
@@ -381,8 +388,9 @@
     }
   }
 
-  // Ask decides whether the prompt needs knowledge from the web; if so it searches.
-  // Any failure just skips the research, the image is made anyway.
+  // Ask decides whether the prompt needs knowledge from the web and which Wikipedia article fits.
+  // Then web research and the reference photo run at the same time.
+  // Any failure just skips that part, the image is made anyway.
   async function research(current) {
     const signal = current.abort.signal;
     current.showResearch = true;
@@ -393,22 +401,41 @@
       plan = await postJson('/api/research/plan', { prompt: current.prompt }, signal);
     } catch {}
     if (current !== job || current.done) return;
-    if (!plan || !plan.needed) {
+    const doResearch = !!(plan && plan.needed && researchWanted());
+    const doReference = !!(plan && plan.wiki && referenceWanted());
+    if (!doResearch && !doReference) {
       current.showResearch = false;
       current.t.researchStart = 0;
       return;
     }
-    current.researchQuery = plan.query;
-    setProgress('Die KI recherchiert im Web', `«${plan.query}»`, null, 'research');
-    try {
-      const r = await postJson('/api/research/run', { prompt: current.prompt, query: plan.query }, signal);
-      if (r && r.facts) current.research = r;
-    } catch {}
+    if (doResearch) current.researchQuery = plan.query;
+    current.preparing = true;
+    const label = doResearch && doReference ? 'Die KI recherchiert im Web und sucht ein Referenzbild'
+      : doResearch ? 'Die KI recherchiert im Web' : 'Die KI sucht ein Referenzbild';
+    setProgress(label, `«${doResearch ? plan.query : plan.wiki}»`, null, 'research');
+
+    const tasks = [];
+    if (doResearch) {
+      tasks.push(postJson('/api/research/run', { prompt: current.prompt, query: plan.query }, signal)
+        .then((r) => { if (r && r.facts) current.research = r; })
+        .catch(() => {}));
+    }
+    if (doReference) {
+      tasks.push(postJson('/api/reference', { wiki: plan.wiki }, signal)
+        .then((r) => {
+          if (r && r.reference) current.reference = { ...r.reference, subject: plan.subject || r.reference.title, transform: !!plan.transform };
+        })
+        .catch(() => {}));
+    }
+    await Promise.all(tasks);
     current.t.researchEnd = performance.now();
     if (current !== job || current.done) return;
-    if (!current.research) setProgress('Recherche nicht möglich, es geht ohne weiter', '', frac('research', 1), 'research');
+    if (!current.research && !current.reference) setProgress('Recherche nicht möglich, es geht ohne weiter', '', frac('research', 1), 'research');
     else renderCaption();
   }
+
+  // Thumbnail of the reference photo, served by ComfyUI from its input folder.
+  const referenceUrl = (ref) => '/comfy/view?' + new URLSearchParams({ filename: ref.name, type: 'input' });
 
   function endJob() {
     if (!job) return;
@@ -489,7 +516,7 @@
       el.grid.hidden = true;
       el.showAll.hidden = true;
     }
-    el.showCaption.hidden = !job.caption && !job.research;
+    el.showCaption.hidden = !job.caption && !job.research && !job.reference;
     setState('result');
   }
 
@@ -514,7 +541,7 @@
     renderCaption();
   }
 
-  // "Was hat die KI verstanden?": research result (if any), then the caption for the image model.
+  // "Was hat die KI verstanden?": reference photo and research (if any), then the caption for the image model.
   function renderCaption() {
     const parts = [];
     const para = (text, cls) => {
@@ -523,6 +550,20 @@
       if (cls) p.className = cls;
       parts.push(p);
     };
+    if (job.reference) {
+      const ref = job.reference;
+      para('Dieses Foto hat die KI als Vorlage angeschaut', 'overlay-sub');
+      const fig = document.createElement('figure');
+      fig.className = 'ref-figure';
+      const img = document.createElement('img');
+      img.src = referenceUrl(ref);
+      img.alt = `Referenzfoto: ${ref.title}`;
+      const cap = document.createElement('figcaption');
+      // CC BY-SA and similar licenses require naming the author and the license.
+      cap.textContent = `${ref.title} · Foto: ${ref.artist || 'unbekannt'} · ${ref.license} · Wikimedia Commons`;
+      fig.append(img, cap);
+      parts.push(fig);
+    }
     if (job.research) {
       para('Das hat die KI im Web recherchiert', 'overlay-sub');
       para(`Suche: «${job.researchQuery}»`, 'lang');
@@ -533,7 +574,7 @@
       if (hosts.length) para('Quellen: ' + hosts.join(', '), 'lang');
     }
     if (job.caption) {
-      if (job.research) para('Daraus wurde diese Bildbeschreibung', 'overlay-sub');
+      if (job.research || job.reference) para('Daraus wurde diese Bildbeschreibung', 'overlay-sub');
       para(job.caption);
       para('Die Beschreibung ist auf Englisch, weil das Bildmodell Englisch am besten versteht.', 'lang');
     }
@@ -549,6 +590,10 @@
     add('Bildmodell', i.model);
     add('Text-Encoder', i.textEncoder);
     add('Sprachmodell', i.languageModel || 'aus (Text direkt ans Bildmodell)');
+    if (job.reference) {
+      const mode = i.reference && i.reference.mode === 'transform' ? 'frei verwandeln' : 'Aussehen übernehmen, Stil und Pose frei';
+      add('Referenzbild', `${job.reference.title} (Wikipedia), ${job.reference.license}, eingelesen mit 0,5 Megapixel, Modus: ${mode}`);
+    }
     if (job.researchQuery) {
       add('Recherche', job.research
         ? `${job.research.model || 'ask'}, Websuche «${job.researchQuery}»`
@@ -896,6 +941,8 @@
     setChecked(el.proUpsampler, advanced.upsampler);
     setChecked(el.proResearch, advanced.research);
     el.proResearchRow.hidden = !researchAvailable();
+    setChecked(el.proReference, advanced.reference);
+    el.proReferenceRow.hidden = !referenceAvailable();
   }
 
   el.proSampler.replaceChildren(...SAMPLERS.map((s) => {
@@ -928,6 +975,7 @@
   el.proSeedDice.addEventListener('click', () => { advanced.seed = randomSeedValue(); renderPro(); });
   el.proUpsampler.addEventListener('change', (e) => { advanced.upsampler = e.detail === 'true'; updateProLink(); });
   el.proResearch.addEventListener('change', (e) => { advanced.research = e.detail === 'true'; updateProLink(); });
+  el.proReference.addEventListener('change', (e) => { advanced.reference = e.detail === 'true'; updateProLink(); });
   el.proReset.addEventListener('click', () => { advanced = defaultAdvanced(); renderPro(); updateProLink(); });
   el.openPro.addEventListener('click', () => { renderPro(); openModal(el.pro); });
 
@@ -963,6 +1011,7 @@
     setChecked(el.aShowRecent, settings.showRecent);
     setChecked(el.aAllowAdvanced, settings.allowAdvanced);
     setChecked(el.aResearch, settings.research);
+    setChecked(el.aReference, settings.reference);
     el.adminMsg.textContent = '';
     stopScreensaver();
     renderAdminStatus();
@@ -981,6 +1030,7 @@
         showRecent: getChecked(el.aShowRecent) === 'true',
         allowAdvanced: getChecked(el.aAllowAdvanced) === 'true',
         research: getChecked(el.aResearch) === 'true',
+        reference: getChecked(el.aReference) === 'true',
       });
       const wasDefault = !advancedChanged();
       settings = data.settings;

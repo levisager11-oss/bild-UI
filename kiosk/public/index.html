@@ -212,6 +212,17 @@
             <button type="button" role="radio" data-value="false" aria-checked="false">Aus</button>
           </div>
         </div>
+
+        <div class="setting" id="proReferenceRow">
+          <div class="setting-text">
+            <span class="setting-name">Referenzfoto</span>
+            <span class="setting-help">Bei echten Orten, Bauwerken, Tieren oder Fahrzeugen schaut die KI ein freies Foto von Wikipedia an, damit das Motiv echt aussieht.</span>
+          </div>
+          <div class="segments" id="proReference">
+            <button type="button" role="radio" data-value="true" aria-checked="true">An</button>
+            <button type="button" role="radio" data-value="false" aria-checked="false">Aus</button>
+          </div>
+        </div>
       </div>
       <div class="modal-foot">
         <button class="link-btn" id="proReset" type="button">Alles zurücksetzen</button>
@@ -279,6 +290,12 @@
             </div>
             <div class="admin-row"><span>Recherche mit ask (automatisch)</span>
               <div class="segments" id="aResearch">
+                <button type="button" role="radio" data-value="true">An</button>
+                <button type="button" role="radio" data-value="false">Aus</button>
+              </div>
+            </div>
+            <div class="admin-row"><span>Referenzfotos von Wikipedia</span>
+              <div class="segments" id="aReference">
                 <button type="button" role="radio" data-value="true">An</button>
                 <button type="button" role="radio" data-value="false">Aus</button>
               </div>

@@ -18,6 +18,8 @@ const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const COUNTER_FILE = path.join(DATA_DIR, 'counter.json');
 const WORKFLOW = JSON.parse(fs.readFileSync(path.join(__dirname, 'workflow.json'), 'utf8'));
 const SYSTEM_PROMPT = fs.readFileSync(path.join(__dirname, 'system_prompt.txt'), 'utf8');
+// System prompt for the prompt upsampler when it also sees a reference image (from the ComfyUI template "FLUX 3 Image Klein: Image Edit").
+const EDIT_SYSTEM_PROMPT = fs.readFileSync(path.join(__dirname, 'system_prompt_edit.txt'), 'utf8');
 
 // Image formats offered in the UI. Flux needs multiples of 16.
 const FORMATS = {
@@ -47,6 +49,7 @@ const DEFAULT_SETTINGS = {
   showRecent: true,      // mix visitor images into the screensaver
   allowAdvanced: true,   // visitors may open "Profi-Einstellungen"
   research: true,        // let ask look things up on the web when a prompt needs it
+  reference: true,       // give the image model a free Wikipedia photo of the named thing
 };
 
 // Samplers visitors can pick in the advanced settings.
@@ -108,6 +111,7 @@ function cleanSettings(input) {
   if (input.showRecent != null) s.showRecent = !!input.showRecent;
   if (input.allowAdvanced != null) s.allowAdvanced = !!input.allowAdvanced;
   if (input.research != null) s.research = !!input.research;
+  if (input.reference != null) s.reference = !!input.reference;
   return s;
 }
 
@@ -180,7 +184,14 @@ function parseJsonAnswer(text) {
 
 const PLAN_PROMPT = `You help an image generator at a school open day. Decide whether drawing the user's image request well needs factual knowledge about specific real-world things that an image model may not know exactly: named places, landmarks and buildings, specific vehicles or machines, animal or plant species, artworks, traditions, historical or recent events, specific products.
 Generic scenes do not need it (a cat with a welding helmet, a robot in a workshop, a city of the future, a dragon made of gears).
-Reply with JSON only: {"needed": true or false, "query": "short web search query that finds what the specific thing looks like"}.`;
+Also name the single most important specific real-world thing, if there is one, so a reference photo can be taken from Wikipedia.
+Reply with JSON only:
+{"needed": true or false,
+ "query": "short web search query that finds what the specific thing looks like",
+ "wiki": "exact title of the German Wikipedia article about that thing, or empty",
+ "subject": "short English name of that thing, e.g. the Zytglogge clock tower, or empty",
+ "person": true if that thing is a real person or a group of real people,
+ "transform": true if the request turns that thing into something else or changes its form (e.g. as a spaceship, made of chocolate, as a robot), false if it is shown as it is}`;
 
 const SEARCH_PROMPT = `Research the visual appearance of the specific real-world things in an image request. Use the web search.
 Then reply with JSON only: {"facts": "3 to 6 short English sentences with visual facts only: shape, colors, materials, size, typical surroundings, distinctive details", "sources": [{"title": "page title", "url": "https://..."}]}.
@@ -258,12 +269,21 @@ async function handleResearchPlan(req, res) {
     return sendJson(res, 400, { error: 'Ungültige Anfrage' });
   }
   const prompt = String(body.prompt || '').trim().slice(0, 1000);
-  if (!settings.research || !askConfig().configured || !prompt) return sendJson(res, 200, { needed: false, off: true });
+  if ((!settings.research && !settings.reference) || !askConfig().configured || !prompt) return sendJson(res, 200, { needed: false, off: true });
   try {
     const { text } = await askChat(PLAN_PROMPT, prompt, askConfig().planExtra, 8000);
     const plan = parseJsonAnswer(text) || {};
     const query = String(plan.query || '').trim().slice(0, 200);
-    sendJson(res, 200, { needed: plan.needed === true && !!query, query });
+    const wiki = settings.reference && plan.person !== true ? String(plan.wiki || '').trim().slice(0, 150) : '';
+    sendJson(res, 200, {
+      // No research and no reference photo for real people.
+      needed: settings.research && plan.needed === true && plan.person !== true && !!query,
+      query,
+      wiki,
+      subject: String(plan.subject || '').trim().slice(0, 100) || wiki,
+      transform: plan.transform === true,
+      person: plan.person === true,
+    });
   } catch (e) {
     console.error('ask plan failed:', errText(e));
     sendJson(res, 200, { needed: false, error: true });
@@ -296,6 +316,89 @@ async function handleResearchRun(req, res) {
     sendJson(res, 200, { facts: null, error: true });
   }
 }
+
+// ---------- Reference photo from Wikipedia ----------
+// Only freely licensed lead images (pilicense=free). The photo is uploaded to ComfyUI's input folder.
+const WIKI_UA = { 'User-Agent': 'KioskBildgenerator/1.0 (https://tfbern.ch; Tag der offenen Tuer)' };
+const REF_CACHE_MS = 60 * 60 * 1000;
+const refCache = new Map(); // title -> { at, ref } (ref may be null when nothing was found)
+
+async function wikiJson(url) {
+  const r = await fetch(url, { headers: WIKI_UA, signal: AbortSignal.timeout(6000) });
+  const t = await r.text();
+  try {
+    return JSON.parse(t);
+  } catch {
+    throw new Error(`Wikipedia antwortet mit HTTP ${r.status}`); // e.g. rate limit page
+  }
+}
+
+const stripHtml = (s) => String(s || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+
+async function findReference(title) {
+  for (const lang of ['de', 'en']) {
+    const api = `https://${lang}.wikipedia.org/w/api.php?format=json&action=query&redirects=1`;
+    const d = await wikiJson(`${api}&prop=pageimages|info&inprop=url&piprop=thumbnail|name&pithumbsize=1024&pilicense=free&titles=${encodeURIComponent(title)}`);
+    const page = Object.values((d.query && d.query.pages) || {})[0];
+    if (!page || page.missing !== undefined || !page.pageimage || !page.thumbnail) continue;
+    if (/\.(svg|gif|tiff?)$/i.test(page.pageimage)) continue; // maps, logos, diagrams
+    const fileTitle = 'File:' + page.pageimage;
+    const m = await wikiJson(`${api}&prop=imageinfo&iiprop=extmetadata|url&titles=${encodeURIComponent(fileTitle)}`);
+    const info = Object.values((m.query && m.query.pages) || {})[0];
+    const meta = (info && info.imageinfo && info.imageinfo[0] && info.imageinfo[0].extmetadata) || {};
+    const license = stripHtml(meta.LicenseShortName && meta.LicenseShortName.value);
+    if (!license) continue;
+
+    const img = await fetch(page.thumbnail.source, { headers: WIKI_UA, signal: AbortSignal.timeout(8000) });
+    if (!img.ok) throw new Error(`Bild nicht ladbar (HTTP ${img.status})`);
+    const buf = Buffer.from(await img.arrayBuffer());
+    const name = `kiosk_ref_${crypto.createHash('sha1').update(lang + ':' + page.title).digest('hex').slice(0, 16)}.jpg`;
+    const form = new FormData();
+    form.append('image', new Blob([buf], { type: img.headers.get('content-type') || 'image/jpeg' }), name);
+    form.append('type', 'input');
+    form.append('overwrite', 'true');
+    const up = await fetch(new URL('/upload/image', COMFY_URL), { method: 'POST', body: form, signal: AbortSignal.timeout(10000) });
+    if (!up.ok) throw new Error(`Upload zu ComfyUI fehlgeschlagen (HTTP ${up.status})`);
+    const uploaded = await up.json();
+    return {
+      name: uploaded.name,
+      title: page.title,
+      pageUrl: page.fullurl,
+      file: page.pageimage,
+      fileUrl: (info.imageinfo[0] && info.imageinfo[0].descriptionurl) || '',
+      license,
+      // Drop Wikipedia signature timestamps like "13:37, 2 July 2006 (UTC)".
+      artist: stripHtml(meta.Artist && meta.Artist.value).replace(/,?\s*\d{1,2}:\d{2},?\s+\d{1,2}\.?\s+\S+\s+\d{4}\s*\(UTC\)/g, '').trim().slice(0, 120),
+      width: page.thumbnail.width,
+      height: page.thumbnail.height,
+    };
+  }
+  return null;
+}
+
+async function handleReference(req, res) {
+  let body;
+  try {
+    body = await readBody(req);
+  } catch {
+    return sendJson(res, 400, { error: 'Ungültige Anfrage' });
+  }
+  const title = String(body.wiki || '').trim().slice(0, 150);
+  if (!settings.reference || !title) return sendJson(res, 200, { reference: null, off: true });
+  const cached = refCache.get(title);
+  if (cached && Date.now() - cached.at < REF_CACHE_MS) return sendJson(res, 200, { reference: cached.ref, cached: true });
+  try {
+    const ref = await findReference(title);
+    refCache.set(title, { at: Date.now(), ref });
+    sendJson(res, 200, { reference: ref });
+  } catch (e) {
+    console.error('reference failed:', errText(e));
+    sendJson(res, 200, { reference: null, error: true });
+  }
+}
+
+// Names of reference photos this server uploaded; only these may be used in a workflow.
+const knownReference = (name) => [...refCache.values()].some((c) => c.ref && c.ref.name === name);
 
 // Reachability of ask for the status display, cached for 30 s.
 let askStatus = { checked: 0, ok: false };
@@ -330,18 +433,49 @@ function cleanAdvanced(input) {
 // ---------- Workflow ----------
 const randomSeed = () => crypto.randomInt(0, 2 ** 48 - 1);
 
-function buildWorkflow({ prompt, format, style, variants, advanced, facts }) {
+// How to tell the upsampler about the reference photo. Tested in Oct. 2026:
+// "transform" works best when the thing becomes something else, "faithful" for styles and plain depictions
+// (otherwise the photo's look, framing and pose get copied and a chosen style gets lost).
+const REFERENCE_REQUEST = {
+  transform: (p, s) => `Create a new image for this request: ${p}\nThe first image is a photo of ${s}, only so you know its real shape and details. Follow the request boldly and creatively: transform, restage and relight ${s} exactly as the request asks. The result may look very different from the photo; only the recognizable design of ${s} is taken from it. The new form asked for must be obvious at first glance, and the surroundings fit the new form, not the photo.`,
+  faithful: (p, s) => `Create a new image for this request: ${p}\nThe first image is a photo of ${s}, given only so you know its real shape and details. Do not copy the photo's look, colors, framing, viewpoint or pose. Follow the request boldly: restage, transform and render the whole image fully in the requested style or medium; only the recognizable design of ${s} comes from the photo.`,
+};
+const ORIENTATION = { '1:1': 'square', '2:3': 'portrait (taller than wide)', '3:2': 'landscape (wider than tall)' };
+
+function buildWorkflow({ prompt, format, style, variants, advanced, facts, reference }) {
   const f = FORMATS[format] || FORMATS.square;
   const wf = structuredClone(WORKFLOW);
   const styleText = STYLES[style];
   const adv = cleanAdvanced(advanced);
   const seed = adv.seed ?? randomSeed();
-  const reference = facts ? `Visual reference facts from a web search (use them to depict the named things accurately, do not render them as text): ${facts}` : '';
+  const factText = facts ? `Visual reference facts from a web search (use them to depict the named things accurately, do not render them as text): ${facts}` : '';
 
-  if (adv.upsampler) {
+  if (reference) {
+    // The photo goes to the image model (ReferenceMultiLatent) and to the upsampler, which can see images.
+    wf['20'] = { class_type: 'LoadImage', inputs: { image: reference.name } };
+    wf['21'] = { class_type: 'ConditioningZeroOut', inputs: { conditioning: ['4', 0] } };
+    wf['22'] = {
+      class_type: 'ReferenceMultiLatent',
+      inputs: { positive: ['4', 0], negative: ['21', 0], vae: ['3', 0], resolution: 'resize', 'resolution.megapixels': 0.5, 'images.image0': ['20', 0] },
+    };
+    wf['7'].inputs.positive = ['22', 0];
+    wf['7'].inputs.negative = ['22', 1];
+    delete wf['5'];
+  }
+
+  if (adv.upsampler && reference) {
+    const mode = reference.transform && !styleText ? 'transform' : 'faithful';
+    let request = REFERENCE_REQUEST[mode](prompt, reference.subject);
+    if (styleText) request += `\nStyle: ${styleText}.`;
+    request += `\nThe new image is ${ORIENTATION[f.canvas]}.`;
+    // When the thing gets transformed, facts about its real surroundings pull the image back to the photo (tested), so leave them out.
+    if (facts && mode === 'faithful') request += `\nVisual facts from a web search: ${facts}`;
+    wf['23'] = { class_type: 'BatchImagesNode', inputs: { 'images.image0': ['20', 0] } };
+    Object.assign(wf['11'].inputs, { prompt: request, system_prompt: EDIT_SYSTEM_PROMPT, 'sampling_mode.seed': randomSeed(), image: ['23', 0] });
+  } else if (adv.upsampler) {
     let request = `TARGET CANVAS: ${f.canvas}\n${prompt}`;
     if (styleText) request += `\nStyle: ${styleText}.`;
-    if (reference) request += `\n${reference}`;
+    if (factText) request += `\n${factText}`;
     wf['11'].inputs.prompt = request;
     wf['11'].inputs.system_prompt = SYSTEM_PROMPT;
     wf['11'].inputs['sampling_mode.seed'] = randomSeed();
@@ -370,6 +504,7 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts }) {
       model: wf['1'].inputs.unet_name.replace('.safetensors', ''),
       textEncoder: wf['2'].inputs.clip_name.replace('.safetensors', ''),
       languageModel: adv.upsampler ? WORKFLOW['12'].inputs.clip_name.replace('.safetensors', '') : null,
+      reference: reference ? { mode: adv.upsampler ? (reference.transform && !styleText ? 'transform' : 'faithful') : 'direct', megapixels: 0.5 } : null,
     },
   };
 }
@@ -419,7 +554,12 @@ async function handleGenerate(req, res) {
   const variants = Math.min(settings.maxVariants, [1, 2, 4].includes(Number(body.variants)) ? Number(body.variants) : 1);
 
   const facts = typeof body.facts === 'string' ? body.facts.trim().slice(0, 1200) : '';
-  const { workflow, info } = buildWorkflow({ prompt, format: body.format, style: body.style, variants, advanced: body.advanced, facts });
+  // Only photos this server fetched itself are accepted as references.
+  const r = body.reference;
+  const reference = settings.reference && r && typeof r.name === 'string' && knownReference(r.name)
+    ? { name: r.name, subject: String(r.subject || 'the main subject').slice(0, 100), transform: r.transform === true }
+    : null;
+  const { workflow, info } = buildWorkflow({ prompt, format: body.format, style: body.style, variants, advanced: body.advanced, facts, reference });
   try {
     const r = await comfyPost('/prompt', {
       prompt: workflow,
@@ -569,6 +709,7 @@ const server = http.createServer(async (req, res) => {
     if (url === '/api/done') return handleDone(req, res);
     if (url === '/api/research/plan') return handleResearchPlan(req, res);
     if (url === '/api/research/run') return handleResearchRun(req, res);
+    if (url === '/api/reference') return handleReference(req, res);
     if (url === '/api/settings') return handleSettings(req, res);
     if (url.startsWith('/api/cancel/')) return handleCancel(res, url.split('/').pop());
     if (url.startsWith('/api/admin/')) return handleAdmin(res, url.split('/').pop());

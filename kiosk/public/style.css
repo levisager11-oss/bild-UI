@@ -276,6 +276,9 @@ textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--tf-blue); }
 .overlay-body p + p { margin-top: 8px; }
 .overlay-body .overlay-sub { font-weight: 700; font-size: 19px; }
 .overlay-body .overlay-sub:not(:first-child) { margin-top: 20px; }
+.ref-figure { display: flex; gap: 16px; align-items: flex-end; margin: 8px 0 0; }
+.ref-figure img { flex: none; width: 140px; height: 140px; object-fit: cover; background: var(--tf-blue-80); }
+.ref-figure figcaption { font-size: 15px; line-height: 1.3; }
 .overlay-body .lang { margin-top: 14px; font-size: 16px; }
 
 .tech-list { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; margin: 0; }

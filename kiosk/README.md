@@ -22,6 +22,7 @@ Dann `http://localhost:8080` öffnen. `--use-system-ca` lässt Node die Zertifik
 - Ergebnis: Raster bei mehreren Bildern, «Was hat die KI verstanden?», «Technik» (Modelle, Seed, Schritte, Dauer, Grafikkarte)
 - Profi-Einstellungen für Besucher: Schritte, Seed, Sampler, Prompt-Verbesserer und Recherche an/aus
 - Optional: Recherche im Web über ask, wenn ein Prompt Weltwissen braucht (siehe unten)
+- Optional: Referenzfoto von Wikipedia für echte Orte, Bauwerke, Tiere und Fahrzeuge (siehe unten)
 - Bildzähler «Heute schon … Bilder erstellt»
 - Hinweis, wenn ComfyUI nicht erreichbar ist
 - Auto-Reset nach Inaktivität, danach Bildschirmschoner mit Beispielbildern und den letzten Besucherbildern
@@ -52,6 +53,25 @@ Besucher sehen die Phase «Recherche» mit dem Suchbegriff im Fortschritt. Fakte
 | `timeoutMs` | Höchstwartezeit für die Zusammenfassung, Standard 25000 |
 
 Alternativ gehen Umgebungsvariablen: `ASK_URL`, `ASK_KEY`, `ASK_MODEL`. Änderungen an `data/ask.json` gelten sofort, ohne Neustart. Ob ask erreichbar ist, zeigt das Betreuer-Menü. Dort lässt sich die Recherche auch ganz abschalten, Besucher können sie in den Profi-Einstellungen ausschalten.
+
+## Referenzfotos von Wikipedia
+
+Nennt ein Wunsch ein bestimmtes echtes Ding (Zytglogge, Matterhorn, Bartgeier, Tesla Cybertruck …), zeigt der Kiosk dem Bildmodell ein Foto davon. Das Motiv sieht dadurch deutlich echter aus. Ablauf:
+
+1. Beim Prüfen nennt ask zusätzlich den passenden deutschen Wikipedia-Artikel, einen englischen Namen des Motivs, ob es eine echte Person ist und ob das Motiv verwandelt wird («als Raumschiff»).
+2. Der Server holt das Hauptbild des Artikels, nur frei lizenzierte Bilder (`pilicense=free`), dazu Urheber und Lizenz von Wikimedia Commons. Er lädt es in den Input-Ordner von ComfyUI und merkt es sich 1 Stunde. Läuft parallel zur Web-Recherche.
+3. Das Foto geht ans Bildmodell (`ReferenceMultiLatent`, 0,5 MP) und an den Prompt-Verbesserer, der es sieht (Systemprompt `system_prompt_edit.txt` aus der ComfyUI-Vorlage «FLUX 3 Image Klein: Image Edit»). Das fertige Bild hat weiterhin die volle Auflösung.
+4. Besucher sehen das Foto mit Urheber und Lizenz unter «Was hat die KI verstanden?».
+
+Getestete Regeln (Okt. 2026, rund 60 Vergleichsbilder mit gleichem Seed):
+
+- **Verwandlung** («als Raumschiff», ohne Stil-Knopf): freie Formulierung, die neue Form muss sofort erkennbar sein. Recherche-Fakten werden dabei weggelassen, weil sie das Bild zurück zum Foto ziehen.
+- **Sonst** (realistisch oder mit Stil): Look, Farben, Bildausschnitt und Pose des Fotos ausdrücklich nicht übernehmen. Sonst geht ein Comic- oder Aquarell-Stil verloren und Tiere übernehmen die Pose aus dem Foto.
+- Ein Foto reicht; zwei waren schlechter. 0,25, 0,5 und 1 MP sehen gleich aus, 0,5 MP ist schneller als 1 MP. Der Prompt-Verbesserer muss das Foto sehen.
+- Keine Fotos und keine Recherche bei echten Personen.
+- Mehrzeit: ca. 1–2 s für das Foto (parallel zur Recherche) und ca. 3 s beim Malen.
+
+Ein- und ausschalten im Betreuer-Menü («Referenzfotos von Wikipedia») und in den Profi-Einstellungen («Referenzfoto»). Braucht ask für den Prüf-Schritt.
 
 ## Betreuer-Menü
 
