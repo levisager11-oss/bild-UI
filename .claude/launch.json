@@ -4,7 +4,7 @@
     {
       "name": "kiosk",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["kiosk/server.js"],
+      "runtimeArgs": ["--use-system-ca", "kiosk/server.js"],
       "port": 8080
     }
   ]

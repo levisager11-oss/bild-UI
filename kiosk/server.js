@@ -123,7 +123,10 @@ function askConfig() {
     apiKey: process.env.ASK_KEY || f.apiKey || '',
     model: process.env.ASK_MODEL || f.model || '',
     planExtra: f.planExtra || {},     // extra request fields for the quick "is research needed?" step
-    searchExtra: f.searchExtra || {}, // extra request fields that switch on ask's web search
+    searchExtra: f.searchExtra || {}, // extra request fields for the research step
+    // "openwebui": search with Open WebUI's own search endpoint, read the top pages, let the model summarize.
+    // "model": the model searches by itself (searchExtra must switch that on).
+    search: f.search === 'model' ? 'model' : 'openwebui',
     timeoutMs: Number(f.timeoutMs) || 25000,
   };
   c.configured = !!(c.url && c.model);
@@ -161,6 +164,9 @@ async function askChat(system, user, extra, timeoutMs) {
   return { text, sources };
 }
 
+// Error message with the network cause (e.g. ENOTFOUND, ECONNREFUSED), for the log.
+const errText = (e) => e.message + (e.cause ? ` (${e.cause.code || e.cause.message})` : '');
+
 // First JSON object in a model answer, or null.
 function parseJsonAnswer(text) {
   const m = text.match(/\{[\s\S]*\}/);
@@ -180,6 +186,70 @@ const SEARCH_PROMPT = `Research the visual appearance of the specific real-world
 Then reply with JSON only: {"facts": "3 to 6 short English sentences with visual facts only: shape, colors, materials, size, typical surroundings, distinctive details", "sources": [{"title": "page title", "url": "https://..."}]}.
 No opinions, no history that cannot be seen, no text or labels to render.`;
 
+const SUMMARY_PROMPT = `You get an image request and text from web pages found for it. Extract what the specific real-world things look like, using only the web page text.
+Reply with JSON only: {"facts": "3 to 6 short English sentences with visual facts only: shape, colors, materials, size, typical surroundings, distinctive details"}.
+No opinions, no history that cannot be seen, no text or labels to render. If the pages say nothing useful about the appearance, reply {"facts": ""}.`;
+
+// Rough HTML to text: drop scripts, styles and navigation, keep paragraph text.
+function htmlToText(html) {
+  return html
+    .replace(/<(script|style|noscript|svg|nav|header|footer|form)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<\/(p|div|li|h[1-6]|br|tr)>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n+/g, '\n')
+    .trim();
+}
+
+async function fetchPageText(url) {
+  try {
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Kiosk KI-Bildgenerator Technische Fachschule Bern)', Accept: 'text/html' },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!r.ok || !/html/.test(r.headers.get('content-type') || '')) return '';
+    return htmlToText((await r.text()).slice(0, 600_000)).slice(0, 3500);
+  } catch {
+    return '';
+  }
+}
+
+// Search via Open WebUI, read the top pages, summarize the appearance with the model.
+async function researchOpenWebUI(prompt, query) {
+  const c = askConfig();
+  const r = await fetch(c.url + '/v1/retrieval/process/web/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + c.apiKey },
+    body: JSON.stringify({ queries: [query] }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!r.ok) throw new Error(`Websuche antwortet mit HTTP ${r.status}`);
+  const items = ((await r.json()).items || []).filter((i) => /^https?:\/\//.test(i.link || ''));
+  if (!items.length) return { facts: '', sources: [] };
+
+  const top = items.slice(0, 3);
+  const texts = await Promise.all(top.map((i) => fetchPageText(i.link)));
+  const material = top.map((it, n) => `### ${it.title}\n${it.link}\n${texts[n] || it.snippet || ''}`).join('\n\n')
+    + '\n\nOther search snippets:\n' + items.slice(3, 8).map((i) => `- ${i.title}: ${i.snippet || ''}`).join('\n');
+
+  const { text } = await askChat(SUMMARY_PROMPT, `Image request: ${prompt}\n\nWeb pages:\n${material}`, c.searchExtra);
+  const answer = parseJsonAnswer(text);
+  let facts = answer ? answer.facts : text;
+  if (Array.isArray(facts)) facts = facts.join(' ');
+  return { facts: String(facts || '').trim(), sources: top.map((i) => ({ title: i.title || '', url: i.link })) };
+}
+
+// The model searches by itself (only if the backend supports it through searchExtra).
+async function researchModel(prompt, query) {
+  const { text, sources: attached } = await askChat(SEARCH_PROMPT, `Image request: ${prompt}\nSearch query: ${query}`, askConfig().searchExtra);
+  const answer = parseJsonAnswer(text);
+  let facts = answer ? answer.facts : text;
+  if (Array.isArray(facts)) facts = facts.join(' ');
+  return { facts: String(facts || '').trim(), sources: [...attached, ...((answer && Array.isArray(answer.sources)) ? answer.sources : [])] };
+}
+
 async function handleResearchPlan(req, res) {
   let body;
   try {
@@ -195,7 +265,7 @@ async function handleResearchPlan(req, res) {
     const query = String(plan.query || '').trim().slice(0, 200);
     sendJson(res, 200, { needed: plan.needed === true && !!query, query });
   } catch (e) {
-    console.error('ask plan failed:', e.message);
+    console.error('ask plan failed:', errText(e));
     sendJson(res, 200, { needed: false, error: true });
   }
 }
@@ -212,17 +282,17 @@ async function handleResearchRun(req, res) {
   if (!settings.research || !askConfig().configured || !prompt) return sendJson(res, 200, { facts: null, off: true });
   const t0 = Date.now();
   try {
-    const { text, sources: attached } = await askChat(SEARCH_PROMPT, `Image request: ${prompt}\nSearch query: ${query}`, askConfig().searchExtra);
-    const answer = parseJsonAnswer(text);
-    const facts = String((answer && answer.facts) || (!answer ? text : '')).trim().slice(0, 1200);
+    const c = askConfig();
+    const result = c.search === 'model' ? await researchModel(prompt, query) : await researchOpenWebUI(prompt, query);
+    const facts = result.facts.slice(0, 1200);
     const seen = new Set();
-    const sources = [...attached, ...((answer && Array.isArray(answer.sources)) ? answer.sources : [])]
+    const sources = result.sources
       .filter((s) => s && /^https?:\/\//.test(s.url || '') && !seen.has(s.url) && seen.add(s.url))
       .slice(0, 4)
       .map((s) => ({ title: String(s.title || '').slice(0, 120), url: String(s.url).slice(0, 300) }));
     sendJson(res, 200, { facts: facts || null, sources, ms: Date.now() - t0, model: askConfig().model });
   } catch (e) {
-    console.error('ask research failed:', e.message);
+    console.error('ask research failed:', errText(e));
     sendJson(res, 200, { facts: null, error: true });
   }
 }

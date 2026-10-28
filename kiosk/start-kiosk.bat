@@ -5,7 +5,8 @@ rem Beenden: Alt+F4 im Browser, danach das Server-Fenster schliessen.
 cd /d "%~dp0"
 if "%COMFY_URL%"=="" set COMFY_URL=http://192.168.60.37:8188
 
-start "Kiosk-Server" /min node server.js
+rem --use-system-ca: Zertifikate von Windows verwenden (ask nutzt ein Zertifikat der Schule)
+start "Kiosk-Server" /min node --use-system-ca server.js
 timeout /t 2 /nobreak >nul
 
 start "" msedge --kiosk http://localhost:8080 --edge-kiosk-type=fullscreen --no-first-run --disable-pinch --overscroll-history-navigation=0

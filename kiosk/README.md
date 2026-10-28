@@ -9,10 +9,10 @@ Doppelklick auf `start-kiosk.bat`. Das startet den Server und öffnet Edge im Vo
 Manuell:
 
 ```bash
-node server.js
+node --use-system-ca server.js
 ```
 
-Dann `http://localhost:8080` öffnen. Benötigt nur Node.js 18 oder neuer, keine Pakete. Die Seite ist nur vom Kiosk-PC selbst erreichbar (`HOST=0.0.0.0` öffnet sie fürs Netz).
+Dann `http://localhost:8080` öffnen. `--use-system-ca` lässt Node die Zertifikate von Windows verwenden. Ohne diese Option scheitert die Verbindung zu ask, weil ask ein Zertifikat der Schule nutzt (Fehler `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` im Server-Fenster). Benötigt nur Node.js 18 oder neuer, keine Pakete. Die Seite ist nur vom Kiosk-PC selbst erreichbar (`HOST=0.0.0.0` öffnet sie fürs Netz).
 
 ## Funktionen
 
@@ -28,11 +28,15 @@ Dann `http://localhost:8080` öffnen. Benötigt nur Node.js 18 oder neuer, keine
 
 ## Recherche mit ask (optional)
 
-Bei Prompts mit bestimmten Dingen aus der echten Welt (Orte, Bauwerke, Fahrzeuge, Tierarten …) fragt der Kiosk zuerst ask, ein OpenAI-kompatibles Sprachmodell mit Websuche. Der Ablauf:
+Bei Prompts mit bestimmten Dingen aus der echten Welt (Orte, Bauwerke, Fahrzeuge, Tierarten …) fragt der Kiosk zuerst ask, das Sprachmodell der Schule (Open WebUI unter `ask.ict-tfbern.ch`). Der Ablauf:
 
-1. **Prüfen** (ca. 1 s): ask entscheidet, ob der Prompt Wissen braucht, und schlägt einen Suchbegriff vor. «Eine Katze mit Helm» braucht keins und geht direkt weiter.
-2. **Recherchieren**: ask sucht im Web und liefert kurze Fakten zum Aussehen, mit Quellen.
+1. **Prüfen** (ca. 1–2 s): ask entscheidet, ob der Prompt Wissen braucht, und schlägt einen Suchbegriff vor. «Eine Katze mit Helm» braucht keins und geht direkt weiter.
+2. **Recherchieren** (ca. 5 s): Die Websuche von Open WebUI liefert Treffer, der Kiosk-Server liest die 3 besten Seiten, ask fasst daraus das Aussehen zusammen. Quellen sind die gelesenen Seiten.
 3. Die Fakten gehen zusammen mit dem Prompt an den Prompt-Verbesserer (Qwen 9B) und von dort an Flux.
+
+Warum nicht einfach «Websuche an» beim Modell? Über die API von Open WebUI sucht das Modell nicht selbst, es erfindet dann Fakten und Quellen. Deshalb nutzt der Kiosk die Such-Schnittstelle von Open WebUI (`/api/v1/retrieval/process/web/search`) direkt. Open WebUI legt dabei pro Suche eine Sammlung `web-search-…` an, wie bei einer Suche im Chat.
+
+Getestet (Okt. 2026): `ask-tfbern-beta` liefert die genauesten Fakten (ca. 5 s), `ask-tfbern` ist schneller, schmückt aber eher aus, `ask-base-nx` ist am langsamsten. `ask-base` soll laut Beschreibung nicht für Chats genutzt werden.
 
 Besucher sehen die Phase «Recherche» mit dem Suchbegriff im Fortschritt. Fakten und Quellen stehen unter «Was hat die KI verstanden?». Fällt ask aus oder antwortet zu langsam, läuft alles ohne Recherche weiter.
 
@@ -40,12 +44,12 @@ Besucher sehen die Phase «Recherche» mit dem Suchbegriff im Fortschritt. Fakte
 
 | Feld | Inhalt |
 | --- | --- |
-| `url` | Basis-Adresse der API bis und mit `/v1` (der Kiosk hängt `/chat/completions` und `/models` an) |
-| `apiKey` | API-Schlüssel, wird als `Authorization: Bearer …` gesendet |
-| `model` | Modellname, z.B. `qwen3.8-flash-next` |
-| `searchExtra` | Zusätzliche Felder, mit denen ask die Websuche einschaltet, z.B. `{ "web_search": true }` oder `{ "tools": [{ "type": "web_search" }] }`, je nach ask |
-| `planExtra` | Zusätzliche Felder für den Prüf-Schritt, z.B. um «Thinking» abzuschalten |
-| `timeoutMs` | Höchstwartezeit für die Recherche, Standard 25000 |
+| `url` | Basis-Adresse der API, für ask `https://ask.ict-tfbern.ch/api` (der Kiosk hängt `/chat/completions`, `/models` und `/v1/retrieval/…` an) |
+| `apiKey` | API-Schlüssel aus ask (Einstellungen → Konto), wird als `Authorization: Bearer …` gesendet |
+| `model` | Modell-ID, empfohlen `ask-tfbern-beta` (Liste: `GET /api/models`) |
+| `search` | `openwebui` (Standard): Websuche über Open WebUI, Seiten liest der Kiosk. `model`: das Modell sucht selbst (nur für andere Server, die das über die API können) |
+| `planExtra` / `searchExtra` | Zusätzliche Felder für die beiden Anfragen ans Modell. Für ask `{ "features": { "web_search": false } }`, damit Open WebUI nicht zusätzlich selbst sucht |
+| `timeoutMs` | Höchstwartezeit für die Zusammenfassung, Standard 25000 |
 
 Alternativ gehen Umgebungsvariablen: `ASK_URL`, `ASK_KEY`, `ASK_MODEL`. Änderungen an `data/ask.json` gelten sofort, ohne Neustart. Ob ask erreichbar ist, zeigt das Betreuer-Menü. Dort lässt sich die Recherche auch ganz abschalten, Besucher können sie in den Profi-Einstellungen ausschalten.
 
