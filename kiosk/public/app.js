@@ -4,7 +4,7 @@
   // ---------- Settings ----------
   const IDLE_MS = 60_000;       // inactivity before the "still there?" prompt
   const IDLE_COUNTDOWN = 10;    // seconds shown in the prompt before reset
-  const IDEA_COUNT = 6;
+  const ideaCount = () => (window.innerHeight < 1000 ? 4 : 6); // fewer ideas on lower screens
   const TIMEOUT_MS = 180_000;   // give up on a job after this long
   const FORMATS = {
     square: [1024, 1024],
@@ -49,7 +49,7 @@
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
-    el.ideas.replaceChildren(...pool.slice(0, IDEA_COUNT).map((text) => {
+    el.ideas.replaceChildren(...pool.slice(0, ideaCount()).map((text) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'idea';

@@ -66,7 +66,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 /* ---------- Left panel ---------- */
-.panel { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+/* Scrolls by touch if a screen is too low, but without a visible scrollbar. */
+.panel { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.panel::-webkit-scrollbar { display: none; }
 
 .eyebrow { margin: 0 0 8px; font-weight: 700; font-size: 20px; color: var(--tf-blue); }
 h1 { margin: 0 0 12px; font-weight: 700; font-size: clamp(34px, 2.6vw, 52px); line-height: 1.1; }
@@ -151,7 +153,8 @@ textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--tf-blue); }
 .btn-secondary { background: var(--tf-white); color: var(--tf-blue); }
 .btn-secondary:active, .btn-secondary[aria-pressed="true"] { background: var(--tf-blue); color: var(--tf-white); }
 .btn:disabled { background: var(--tf-blue-50); border-color: var(--tf-blue-50); color: var(--tf-white); cursor: not-allowed; }
-.btn-xl { margin-top: auto; min-height: 84px; font-size: 28px; width: 100%; flex: none; }
+/* Stays visible at the bottom of the panel, even when the panel has to scroll. */
+.btn-xl { margin-top: auto; min-height: 84px; font-size: 28px; width: 100%; flex: none; position: sticky; bottom: 0; box-shadow: 0 -16px 0 var(--tf-white); }
 
 /* ---------- Stage ---------- */
 .stage {
@@ -259,6 +262,29 @@ textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--tf-blue); }
 .idle-box h2 { margin: 0 0 16px; font-weight: 700; font-size: 44px; }
 .idle-box p { margin: 0; font-size: 26px; }
 .idle-box span { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ---------- Lower screens (e.g. 1080p with 125 % scaling = 864 px) ---------- */
+@media (max-height: 1000px) and (min-aspect-ratio: 1/1) {
+  :root { --touch: 56px; }
+  .topbar { padding-top: 14px; padding-bottom: 8px; }
+  .logo { height: 48px; }
+  .layout { padding-bottom: 24px; }
+  .eyebrow { font-size: 17px; margin-bottom: 4px; }
+  h1 { font-size: clamp(32px, 2.6vw, 44px); margin-bottom: 8px; }
+  .lead { font-size: 19px; margin-bottom: 16px; }
+  .field-label { font-size: 16px; margin-bottom: 8px; }
+  textarea { font-size: 22px; padding: 14px 16px; height: 104px; }
+  .ideas-head { margin-top: 16px; }
+  .ideas-head .field-label { margin-bottom: 8px; }
+  .idea { font-size: 17px; padding: 8px 14px; }
+  .format { margin-top: 16px; }
+  .segments { margin-bottom: 16px; }
+  .segments button { font-size: 17px; }
+  .btn { font-size: 19px; }
+  .btn-xl { min-height: 68px; font-size: 24px; }
+  .stage { gap: 14px; }
+  .progress-label { font-size: 21px; }
+}
 
 /* ---------- Portrait screens / narrow ---------- */
 @media (max-aspect-ratio: 1/1), (max-width: 900px) {
