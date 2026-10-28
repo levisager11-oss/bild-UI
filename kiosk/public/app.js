@@ -40,7 +40,8 @@
     saver: $('saver'), saverA: $('saverA'), saverB: $('saverB'), saverPrompt: $('saverPrompt'),
     pro: $('pro'), proSteps: $('proSteps'), seedMode: $('seedMode'), seedFixed: $('seedFixed'),
     proSeed: $('proSeed'), proSeedDice: $('proSeedDice'), proSampler: $('proSampler'),
-    proUpsampler: $('proUpsampler'), proReset: $('proReset'),
+    proUpsampler: $('proUpsampler'), proResearch: $('proResearch'), proResearchRow: $('proResearchRow'), proReset: $('proReset'),
+    aResearch: $('aResearch'),
     admin: $('admin'), adminStatus: $('adminStatus'), adminMsg: $('adminMsg'), adminSave: $('adminSave'),
     adminSaver: $('adminSaver'), adminReload: $('adminReload'),
     aSteps: $('aSteps'), aIdle: $('aIdle'), aSaver: $('aSaver'), aMaxVariants: $('aMaxVariants'),
@@ -51,8 +52,8 @@
   const clientId = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
 
   // ---------- State ----------
-  let settings = { steps: 16, upsampler: true, maxVariants: 4, idleSeconds: 60, screensaverSeconds: 30, showRecent: true, allowAdvanced: true };
-  let status = { comfy: true, gpu: null, queue: null, imagesToday: 0, recentCount: 0 };
+  let settings = { steps: 16, upsampler: true, maxVariants: 4, idleSeconds: 60, screensaverSeconds: 30, showRecent: true, allowAdvanced: true, research: true };
+  let status = { comfy: true, gpu: null, queue: null, ask: { configured: false }, imagesToday: 0, recentCount: 0 };
   let state = 'idle';           // idle | generating | result
   let format = 'square';
   let count = 1;
@@ -64,12 +65,16 @@
   let ws = null;
 
   function defaultAdvanced() {
-    return { steps: settings.steps, seedMode: 'random', seed: '', sampler: 'euler', upsampler: settings.upsampler };
+    return { steps: settings.steps, seedMode: 'random', seed: '', sampler: 'euler', upsampler: settings.upsampler, research: true };
   }
   function advancedChanged() {
     const d = defaultAdvanced();
-    return advanced.steps !== d.steps || advanced.seedMode !== 'random' || advanced.sampler !== d.sampler || advanced.upsampler !== d.upsampler;
+    return advanced.steps !== d.steps || advanced.seedMode !== 'random' || advanced.sampler !== d.sampler
+      || advanced.upsampler !== d.upsampler || advanced.research !== d.research;
   }
+  // Research runs only if ask is set up, the staff menu allows it and the visitor did not switch it off.
+  const researchAvailable = () => !!(status.ask && status.ask.configured && settings.research);
+  const researchWanted = () => researchAvailable() && (!settings.allowAdvanced || advanced.research);
   const randomSeedValue = () => String(Math.floor(Math.random() * 1e12));
 
   // ---------- Small helpers ----------
@@ -95,8 +100,8 @@
     return b ? b.dataset.value : null;
   }
 
-  async function postJson(url, body) {
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  async function postJson(url, body, signal) {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}), signal });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error || 'Unbekannter Fehler');
     return data;
@@ -262,15 +267,30 @@
     el.progressDetail.textContent = detail || '';
     el.bar.classList.toggle('is-indeterminate', fraction == null);
     if (fraction != null) el.barFill.style.width = Math.round(Math.max(0, Math.min(1, fraction)) * 100) + '%';
-    const order = ['text', 'image', 'done'];
+    const order = ['research', 'text', 'image', 'done'];
     const idx = order.indexOf(activePhase);
     el.phases.forEach((p) => {
       const i = order.indexOf(p.dataset.phase);
       p.classList.toggle('is-active', i === idx);
       p.classList.toggle('is-done', idx >= 0 && i < idx);
     });
-    const textPhase = el.phases.find((p) => p.dataset.phase === 'text');
-    textPhase.hidden = !!(job && job.info && !job.info.upsampler);
+    const phase = (name) => el.phases.find((p) => p.dataset.phase === name);
+    phase('text').hidden = !!(job && !job.upsampler);
+    phase('research').hidden = !(job && job.showResearch);
+  }
+
+  // Share of the progress bar for each phase, depending on which phases run.
+  function frac(phase, f) {
+    const r = job && job.researchQuery;
+    const up = !job || job.upsampler;
+    const start = r ? 0.2 : 0.02;
+    const spans = {
+      research: [0.02, 0.2],
+      text: [start, up ? start + 0.3 : start],
+      image: [up ? start + 0.3 : start + 0.03, 0.95],
+    };
+    const [a, b] = spans[phase];
+    return a + (b - a) * Math.max(0, Math.min(1, f));
   }
 
   // ---------- "Wusstest du?" ----------
@@ -323,10 +343,15 @@
     el.grid.hidden = true;
     el.grid.replaceChildren();
 
+    const adv = settings.allowAdvanced
+      ? { steps: advanced.steps, sampler: advanced.sampler, upsampler: advanced.upsampler, seed: advanced.seedMode === 'fixed' && advanced.seed !== '' ? Number(advanced.seed) : null }
+      : null;
     job = {
       id: null, prompt, format, count, style, info: null, images: [], selected: 0,
       started: false, done: false, tokens: 0, caption: '',
-      t: { start: 0, textStart: 0, textEnd: 0, imageStart: 0, imageEnd: 0, end: 0 },
+      upsampler: adv ? adv.upsampler : settings.upsampler,
+      showResearch: false, researchQuery: '', research: null, abort: new AbortController(),
+      t: { start: 0, researchStart: 0, researchEnd: 0, textStart: 0, textEnd: 0, imageStart: 0, imageEnd: 0, end: 0 },
     };
     setState('generating');
     showPlaceholder(format);
@@ -337,11 +362,12 @@
     job.poll = setInterval(pollHistory, 2000);
 
     const current = job;
-    const adv = settings.allowAdvanced
-      ? { steps: advanced.steps, sampler: advanced.sampler, upsampler: advanced.upsampler, seed: advanced.seedMode === 'fixed' && advanced.seed !== '' ? Number(advanced.seed) : null }
-      : null;
+    const stillCurrent = () => current === job && !current.done;
     try {
-      const data = await postJson('/api/generate', { prompt, format, style, variants: count, advanced: adv, clientId });
+      if (researchWanted()) await research(current);
+      if (!stillCurrent()) return;
+      const facts = current.research ? current.research.facts : null;
+      const data = await postJson('/api/generate', { prompt, format, style, variants: count, advanced: adv, facts, clientId });
       if (current !== job || current.done) {
         ignoredIds.add(data.promptId);
         fetch('/api/cancel/' + data.promptId, { method: 'POST' }).catch(() => {});
@@ -351,8 +377,37 @@
       job.info = data.info;
       if (!job.started) setProgress('In der Warteschlange', 'gleich geht es los', null, null);
     } catch (e) {
-      if (current === job) failJob(e.message);
+      if (stillCurrent()) failJob(e.message);
     }
+  }
+
+  // Ask decides whether the prompt needs knowledge from the web; if so it searches.
+  // Any failure just skips the research, the image is made anyway.
+  async function research(current) {
+    const signal = current.abort.signal;
+    current.showResearch = true;
+    current.t.researchStart = performance.now();
+    setProgress('Die KI prüft, ob sie etwas nachschlagen muss', '', null, 'research');
+    let plan = null;
+    try {
+      plan = await postJson('/api/research/plan', { prompt: current.prompt }, signal);
+    } catch {}
+    if (current !== job || current.done) return;
+    if (!plan || !plan.needed) {
+      current.showResearch = false;
+      current.t.researchStart = 0;
+      return;
+    }
+    current.researchQuery = plan.query;
+    setProgress('Die KI recherchiert im Web', `«${plan.query}»`, null, 'research');
+    try {
+      const r = await postJson('/api/research/run', { prompt: current.prompt, query: plan.query }, signal);
+      if (r && r.facts) current.research = r;
+    } catch {}
+    current.t.researchEnd = performance.now();
+    if (current !== job || current.done) return;
+    if (!current.research) setProgress('Recherche nicht möglich, es geht ohne weiter', '', frac('research', 1), 'research');
+    else renderCaption();
   }
 
   function endJob() {
@@ -375,6 +430,7 @@
     if (!job || job.done) return;
     const id = job.id;
     if (id) ignoredIds.add(id);
+    job.abort.abort();
     endJob();
     job = null;
     setState('idle');
@@ -433,7 +489,7 @@
       el.grid.hidden = true;
       el.showAll.hidden = true;
     }
-    el.showCaption.hidden = !job.caption;
+    el.showCaption.hidden = !job.caption && !job.research;
     setState('result');
   }
 
@@ -455,12 +511,33 @@
   function setCaption(text) {
     if (!text || !job) return;
     job.caption = text;
-    const p = document.createElement('p');
-    p.textContent = text;
-    const note = document.createElement('p');
-    note.className = 'lang';
-    note.textContent = 'Die Beschreibung ist auf Englisch, weil das Bildmodell Englisch am besten versteht.';
-    el.captionText.replaceChildren(p, note);
+    renderCaption();
+  }
+
+  // "Was hat die KI verstanden?": research result (if any), then the caption for the image model.
+  function renderCaption() {
+    const parts = [];
+    const para = (text, cls) => {
+      const p = document.createElement('p');
+      p.textContent = text;
+      if (cls) p.className = cls;
+      parts.push(p);
+    };
+    if (job.research) {
+      para('Das hat die KI im Web recherchiert', 'overlay-sub');
+      para(`Suche: «${job.researchQuery}»`, 'lang');
+      para(job.research.facts);
+      const hosts = [...new Set((job.research.sources || []).map((s) => {
+        try { return new URL(s.url).hostname.replace(/^www\./, ''); } catch { return ''; }
+      }).filter(Boolean))];
+      if (hosts.length) para('Quellen: ' + hosts.join(', '), 'lang');
+    }
+    if (job.caption) {
+      if (job.research) para('Daraus wurde diese Bildbeschreibung', 'overlay-sub');
+      para(job.caption);
+      para('Die Beschreibung ist auf Englisch, weil das Bildmodell Englisch am besten versteht.', 'lang');
+    }
+    el.captionText.replaceChildren(...parts);
   }
 
   function renderTech() {
@@ -472,14 +549,21 @@
     add('Bildmodell', i.model);
     add('Text-Encoder', i.textEncoder);
     add('Sprachmodell', i.languageModel || 'aus (Text direkt ans Bildmodell)');
+    if (job.researchQuery) {
+      add('Recherche', job.research
+        ? `${job.research.model || 'ask'}, Websuche «${job.researchQuery}»`
+        : `Websuche «${job.researchQuery}» nicht möglich`);
+    }
     add('Auflösung', `${i.width} × ${i.height} Pixel` + (i.variants > 1 ? `, ${i.variants} Bilder` : ''));
     add('Schritte', `${i.steps}, Sampler ${i.sampler}`);
     add('Seed', String(i.seed) + (i.variants > 1 ? ` (alle ${i.variants} Bilder in einem Durchgang)` : ''));
     if (job.tokens) add('Textbausteine', `${job.tokens} Tokens geschrieben`);
     const parts = [];
+    if (t.researchStart && t.researchEnd) parts.push(`Recherche ${seconds(t.researchEnd - t.researchStart)}`);
     if (i.upsampler && t.textStart && t.textEnd) parts.push(`Beschreibung ${seconds(t.textEnd - t.textStart)}`);
     if (t.imageStart && t.imageEnd) parts.push(`Bild ${seconds(t.imageEnd - t.imageStart)}`);
-    if (t.start && t.end) parts.push(`gesamt ${seconds(t.end - t.start)}`);
+    const begin = t.researchStart || t.start;
+    if (begin && t.end) parts.push(`gesamt ${seconds(t.end - begin)}`);
     if (parts.length) add('Dauer', parts.join(' · '));
     if (status.gpu) add('Grafikkarte', status.gpu.name + (status.gpu.vramTotal ? `, ${Math.round(status.gpu.vramTotal / 2 ** 30)} GB Speicher` : ''));
 
@@ -549,18 +633,19 @@
       case 'execution_start':
         job.started = true;
         t.start = now;
-        setProgress(textLabel, '', 0.02, 'text');
+        if (job.upsampler) setProgress(textLabel, '', frac('text', 0), 'text');
+        else setProgress(imageLabel, '', frac('image', 0), 'image');
         break;
       case 'executing':
         if (data.node === NODE_UPSAMPLER) {
           t.textStart = now;
-          setProgress(textLabel, '', 0.02, 'text');
+          setProgress(textLabel, '', frac('text', 0), 'text');
         } else if (data.node === NODE_ENCODE) {
           if (t.textStart && !t.textEnd) t.textEnd = now;
         } else if (data.node === NODE_SAMPLER) {
           if (t.textStart && !t.textEnd) t.textEnd = now;
           t.imageStart = now;
-          setProgress(imageLabel, '', 0.4, 'image');
+          setProgress(imageLabel, '', frac('image', 0), 'image');
         } else if (data.node === NODE_DECODE) {
           t.imageEnd = now;
           setProgress(job.count > 1 ? 'Die Bilder werden fertiggestellt' : 'Fast fertig', '', 0.96, 'image');
@@ -570,10 +655,9 @@
         if (data.node === NODE_UPSAMPLER) {
           job.tokens = data.value;
           // Captions are usually 200 to 450 tokens.
-          setProgress(textLabel, `${data.value} Textbausteine`, Math.min(data.value / 420, 0.95) * 0.38 + 0.02, 'text');
+          setProgress(textLabel, `${data.value} Textbausteine`, frac('text', Math.min(data.value / 420, 0.95)), 'text');
         } else if (data.node === NODE_SAMPLER) {
-          const start = job.info && !job.info.upsampler ? 0.05 : 0.4;
-          setProgress(imageLabel, `Schritt ${data.value} von ${data.max}`, start + (0.95 - start) * (data.value / data.max), 'image');
+          setProgress(imageLabel, `Schritt ${data.value} von ${data.max}`, frac('image', data.value / data.max), 'image');
         }
         break;
       case 'executed':
@@ -810,6 +894,8 @@
     el.proSeed.value = advanced.seed;
     setChecked(el.proSampler, advanced.sampler);
     setChecked(el.proUpsampler, advanced.upsampler);
+    setChecked(el.proResearch, advanced.research);
+    el.proResearchRow.hidden = !researchAvailable();
   }
 
   el.proSampler.replaceChildren(...SAMPLERS.map((s) => {
@@ -841,6 +927,7 @@
   });
   el.proSeedDice.addEventListener('click', () => { advanced.seed = randomSeedValue(); renderPro(); });
   el.proUpsampler.addEventListener('change', (e) => { advanced.upsampler = e.detail === 'true'; updateProLink(); });
+  el.proResearch.addEventListener('change', (e) => { advanced.research = e.detail === 'true'; updateProLink(); });
   el.proReset.addEventListener('click', () => { advanced = defaultAdvanced(); renderPro(); updateProLink(); });
   el.openPro.addEventListener('click', () => { renderPro(); openModal(el.pro); });
 
@@ -852,6 +939,9 @@
       ['Warteschlange', status.queue ? `${status.queue.running} läuft, ${status.queue.pending} wartet` : '–'],
       ['Bilder heute', String(status.imagesToday || 0)],
       ['Besucherbilder im Schoner', String(status.recentCount || 0)],
+      ['ask (Recherche)', !status.ask || !status.ask.configured
+        ? 'nicht eingerichtet (data/ask.json fehlt)'
+        : `${status.ask.model}, ${status.ask.ok ? 'erreichbar' : 'NICHT erreichbar'}`, !!(status.ask && status.ask.configured && !status.ask.ok)],
       ['Verbindung Seite', ws && ws.readyState === WebSocket.OPEN ? 'Live-Verbindung steht' : 'Live-Verbindung unterbrochen', !(ws && ws.readyState === WebSocket.OPEN)],
     ];
     el.adminStatus.replaceChildren(...rows.flatMap(([k, v, bad]) => {
@@ -872,6 +962,7 @@
     setChecked(el.aUpsampler, settings.upsampler);
     setChecked(el.aShowRecent, settings.showRecent);
     setChecked(el.aAllowAdvanced, settings.allowAdvanced);
+    setChecked(el.aResearch, settings.research);
     el.adminMsg.textContent = '';
     stopScreensaver();
     renderAdminStatus();
@@ -889,6 +980,7 @@
         upsampler: getChecked(el.aUpsampler) === 'true',
         showRecent: getChecked(el.aShowRecent) === 'true',
         allowAdvanced: getChecked(el.aAllowAdvanced) === 'true',
+        research: getChecked(el.aResearch) === 'true',
       });
       const wasDefault = !advancedChanged();
       settings = data.settings;

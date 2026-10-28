@@ -1,0 +1,8 @@
+{
+  "url": "https://ADRESSE-VON-ASK/v1",
+  "apiKey": "HIER-DEN-API-SCHLUESSEL-EINTRAGEN",
+  "model": "qwen3.8-flash-next",
+  "planExtra": {},
+  "searchExtra": {},
+  "timeoutMs": 25000
+}

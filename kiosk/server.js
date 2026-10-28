@@ -46,6 +46,7 @@ const DEFAULT_SETTINGS = {
   screensaverSeconds: 30, // idle start screen before the screensaver, 0 = off
   showRecent: true,      // mix visitor images into the screensaver
   allowAdvanced: true,   // visitors may open "Profi-Einstellungen"
+  research: true,        // let ask look things up on the web when a prompt needs it
 };
 
 // Samplers visitors can pick in the advanced settings.
@@ -106,7 +107,141 @@ function cleanSettings(input) {
   if (input.screensaverSeconds != null) s.screensaverSeconds = int(input.screensaverSeconds, 0, 600);
   if (input.showRecent != null) s.showRecent = !!input.showRecent;
   if (input.allowAdvanced != null) s.allowAdvanced = !!input.allowAdvanced;
+  if (input.research != null) s.research = !!input.research;
   return s;
+}
+
+// ---------- ask (OpenAI-compatible language model with web search) ----------
+// Config in data/ask.json (see ask.example.json) or ASK_URL / ASK_KEY / ASK_MODEL. Read on every use,
+// so changes need no restart.
+const ASK_FILE = path.join(DATA_DIR, 'ask.json');
+
+function askConfig() {
+  const f = readJson(ASK_FILE, {});
+  const c = {
+    url: (process.env.ASK_URL || f.url || '').replace(/\/+$/, ''),
+    apiKey: process.env.ASK_KEY || f.apiKey || '',
+    model: process.env.ASK_MODEL || f.model || '',
+    planExtra: f.planExtra || {},     // extra request fields for the quick "is research needed?" step
+    searchExtra: f.searchExtra || {}, // extra request fields that switch on ask's web search
+    timeoutMs: Number(f.timeoutMs) || 25000,
+  };
+  c.configured = !!(c.url && c.model);
+  return c;
+}
+
+async function askChat(system, user, extra, timeoutMs) {
+  const c = askConfig();
+  if (!c.configured) throw new Error('ask ist nicht eingerichtet');
+  const headers = { 'Content-Type': 'application/json' };
+  if (c.apiKey) headers.Authorization = 'Bearer ' + c.apiKey;
+  const r = await fetch(c.url + '/chat/completions', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: c.model,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      temperature: 0.2,
+      ...extra,
+    }),
+    signal: AbortSignal.timeout(timeoutMs || c.timeoutMs),
+  });
+  if (!r.ok) throw new Error(`ask antwortet mit HTTP ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  const d = await r.json();
+  const msg = (d.choices && d.choices[0] && d.choices[0].message) || {};
+  let text = typeof msg.content === 'string' ? msg.content : Array.isArray(msg.content) ? msg.content.map((p) => p.text || '').join('') : '';
+  text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim(); // Qwen thinking output
+  // Sources the backend attached itself (OpenAI-style url_citation annotations, or a plain list).
+  const sources = [];
+  for (const a of msg.annotations || []) {
+    const u = a.url_citation || a;
+    if (u && u.url) sources.push({ title: u.title || '', url: u.url });
+  }
+  for (const u of d.citations || []) if (typeof u === 'string') sources.push({ title: '', url: u });
+  return { text, sources };
+}
+
+// First JSON object in a model answer, or null.
+function parseJsonAnswer(text) {
+  const m = text.match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try {
+    return JSON.parse(m[0]);
+  } catch {
+    return null;
+  }
+}
+
+const PLAN_PROMPT = `You help an image generator at a school open day. Decide whether drawing the user's image request well needs factual knowledge about specific real-world things that an image model may not know exactly: named places, landmarks and buildings, specific vehicles or machines, animal or plant species, artworks, traditions, historical or recent events, specific products.
+Generic scenes do not need it (a cat with a welding helmet, a robot in a workshop, a city of the future, a dragon made of gears).
+Reply with JSON only: {"needed": true or false, "query": "short web search query that finds what the specific thing looks like"}.`;
+
+const SEARCH_PROMPT = `Research the visual appearance of the specific real-world things in an image request. Use the web search.
+Then reply with JSON only: {"facts": "3 to 6 short English sentences with visual facts only: shape, colors, materials, size, typical surroundings, distinctive details", "sources": [{"title": "page title", "url": "https://..."}]}.
+No opinions, no history that cannot be seen, no text or labels to render.`;
+
+async function handleResearchPlan(req, res) {
+  let body;
+  try {
+    body = await readBody(req);
+  } catch {
+    return sendJson(res, 400, { error: 'Ungültige Anfrage' });
+  }
+  const prompt = String(body.prompt || '').trim().slice(0, 1000);
+  if (!settings.research || !askConfig().configured || !prompt) return sendJson(res, 200, { needed: false, off: true });
+  try {
+    const { text } = await askChat(PLAN_PROMPT, prompt, askConfig().planExtra, 8000);
+    const plan = parseJsonAnswer(text) || {};
+    const query = String(plan.query || '').trim().slice(0, 200);
+    sendJson(res, 200, { needed: plan.needed === true && !!query, query });
+  } catch (e) {
+    console.error('ask plan failed:', e.message);
+    sendJson(res, 200, { needed: false, error: true });
+  }
+}
+
+async function handleResearchRun(req, res) {
+  let body;
+  try {
+    body = await readBody(req);
+  } catch {
+    return sendJson(res, 400, { error: 'Ungültige Anfrage' });
+  }
+  const prompt = String(body.prompt || '').trim().slice(0, 1000);
+  const query = String(body.query || '').trim().slice(0, 200);
+  if (!settings.research || !askConfig().configured || !prompt) return sendJson(res, 200, { facts: null, off: true });
+  const t0 = Date.now();
+  try {
+    const { text, sources: attached } = await askChat(SEARCH_PROMPT, `Image request: ${prompt}\nSearch query: ${query}`, askConfig().searchExtra);
+    const answer = parseJsonAnswer(text);
+    const facts = String((answer && answer.facts) || (!answer ? text : '')).trim().slice(0, 1200);
+    const seen = new Set();
+    const sources = [...attached, ...((answer && Array.isArray(answer.sources)) ? answer.sources : [])]
+      .filter((s) => s && /^https?:\/\//.test(s.url || '') && !seen.has(s.url) && seen.add(s.url))
+      .slice(0, 4)
+      .map((s) => ({ title: String(s.title || '').slice(0, 120), url: String(s.url).slice(0, 300) }));
+    sendJson(res, 200, { facts: facts || null, sources, ms: Date.now() - t0, model: askConfig().model });
+  } catch (e) {
+    console.error('ask research failed:', e.message);
+    sendJson(res, 200, { facts: null, error: true });
+  }
+}
+
+// Reachability of ask for the status display, cached for 30 s.
+let askStatus = { checked: 0, ok: false };
+async function getAskStatus() {
+  const c = askConfig();
+  if (!c.configured) return { configured: false };
+  if (Date.now() - askStatus.checked > 30000) {
+    try {
+      const headers = c.apiKey ? { Authorization: 'Bearer ' + c.apiKey } : {};
+      const r = await fetch(c.url + '/models', { headers, signal: AbortSignal.timeout(3000) });
+      askStatus = { checked: Date.now(), ok: r.ok };
+    } catch {
+      askStatus = { checked: Date.now(), ok: false };
+    }
+  }
+  return { configured: true, ok: askStatus.ok, model: c.model };
 }
 
 // Visitor overrides from "Profi-Einstellungen". Missing values fall back to the settings.
@@ -125,23 +260,25 @@ function cleanAdvanced(input) {
 // ---------- Workflow ----------
 const randomSeed = () => crypto.randomInt(0, 2 ** 48 - 1);
 
-function buildWorkflow({ prompt, format, style, variants, advanced }) {
+function buildWorkflow({ prompt, format, style, variants, advanced, facts }) {
   const f = FORMATS[format] || FORMATS.square;
   const wf = structuredClone(WORKFLOW);
   const styleText = STYLES[style];
   const adv = cleanAdvanced(advanced);
   const seed = adv.seed ?? randomSeed();
+  const reference = facts ? `Visual reference facts from a web search (use them to depict the named things accurately, do not render them as text): ${facts}` : '';
 
   if (adv.upsampler) {
     let request = `TARGET CANVAS: ${f.canvas}\n${prompt}`;
     if (styleText) request += `\nStyle: ${styleText}.`;
+    if (reference) request += `\n${reference}`;
     wf['11'].inputs.prompt = request;
     wf['11'].inputs.system_prompt = SYSTEM_PROMPT;
     wf['11'].inputs['sampling_mode.seed'] = randomSeed();
   } else {
     // Without the language model the prompt goes straight to the text encoder.
     for (const id of ['11', '12', '13']) delete wf[id];
-    wf['4'].inputs.text = styleText ? `${prompt}. Style: ${styleText}.` : prompt;
+    wf['4'].inputs.text = [prompt, styleText && `Style: ${styleText}.`, facts].filter(Boolean).join('. ');
   }
   wf['6'].inputs.width = f.width;
   wf['6'].inputs.height = f.height;
@@ -211,7 +348,8 @@ async function handleGenerate(req, res) {
   if (!prompt) return sendJson(res, 400, { error: 'Bitte gib eine Beschreibung ein.' });
   const variants = Math.min(settings.maxVariants, [1, 2, 4].includes(Number(body.variants)) ? Number(body.variants) : 1);
 
-  const { workflow, info } = buildWorkflow({ prompt, format: body.format, style: body.style, variants, advanced: body.advanced });
+  const facts = typeof body.facts === 'string' ? body.facts.trim().slice(0, 1200) : '';
+  const { workflow, info } = buildWorkflow({ prompt, format: body.format, style: body.style, variants, advanced: body.advanced, facts });
   try {
     const r = await comfyPost('/prompt', {
       prompt: workflow,
@@ -271,7 +409,8 @@ async function handleStatus(res) {
     if (d) gpu = { name: d.name.replace(/^cuda:\d+\s*/, '').split(' : ')[0].trim(), vramTotal: d.vram_total, vramFree: d.vram_free };
     queue = { running: q.queue_running.length, pending: q.queue_pending.length };
   } catch {}
-  sendJson(res, 200, { comfy: comfyOk, comfyUrl: COMFY_URL.origin, gpu, queue, imagesToday: imagesToday(), recentCount: recent.length, settings });
+  const ask = await getAskStatus();
+  sendJson(res, 200, { comfy: comfyOk, comfyUrl: COMFY_URL.origin, gpu, queue, ask, imagesToday: imagesToday(), recentCount: recent.length, settings });
 }
 
 async function handleSettings(req, res) {
@@ -358,6 +497,8 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST') {
     if (url === '/api/generate') return handleGenerate(req, res);
     if (url === '/api/done') return handleDone(req, res);
+    if (url === '/api/research/plan') return handleResearchPlan(req, res);
+    if (url === '/api/research/run') return handleResearchRun(req, res);
     if (url === '/api/settings') return handleSettings(req, res);
     if (url.startsWith('/api/cancel/')) return handleCancel(res, url.split('/').pop());
     if (url.startsWith('/api/admin/')) return handleAdmin(res, url.split('/').pop());

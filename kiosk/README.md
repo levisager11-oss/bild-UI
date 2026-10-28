@@ -20,10 +20,34 @@ Dann `http://localhost:8080` öffnen. Benötigt nur Node.js 18 oder neuer, keine
 - Format Quadrat/Hoch/Quer, 1, 2 oder 4 Bilder auf einmal
 - Fortschritt mit Live-Vorschau und «Wusstest du?»-Texten (KI und Schule)
 - Ergebnis: Raster bei mehreren Bildern, «Was hat die KI verstanden?», «Technik» (Modelle, Seed, Schritte, Dauer, Grafikkarte)
-- Profi-Einstellungen für Besucher: Schritte, Seed, Sampler, Prompt-Verbesserer an/aus
+- Profi-Einstellungen für Besucher: Schritte, Seed, Sampler, Prompt-Verbesserer und Recherche an/aus
+- Optional: Recherche im Web über ask, wenn ein Prompt Weltwissen braucht (siehe unten)
 - Bildzähler «Heute schon … Bilder erstellt»
 - Hinweis, wenn ComfyUI nicht erreichbar ist
 - Auto-Reset nach Inaktivität, danach Bildschirmschoner mit Beispielbildern und den letzten Besucherbildern
+
+## Recherche mit ask (optional)
+
+Bei Prompts mit bestimmten Dingen aus der echten Welt (Orte, Bauwerke, Fahrzeuge, Tierarten …) fragt der Kiosk zuerst ask, ein OpenAI-kompatibles Sprachmodell mit Websuche. Der Ablauf:
+
+1. **Prüfen** (ca. 1 s): ask entscheidet, ob der Prompt Wissen braucht, und schlägt einen Suchbegriff vor. «Eine Katze mit Helm» braucht keins und geht direkt weiter.
+2. **Recherchieren**: ask sucht im Web und liefert kurze Fakten zum Aussehen, mit Quellen.
+3. Die Fakten gehen zusammen mit dem Prompt an den Prompt-Verbesserer (Qwen 9B) und von dort an Flux.
+
+Besucher sehen die Phase «Recherche» mit dem Suchbegriff im Fortschritt. Fakten und Quellen stehen unter «Was hat die KI verstanden?». Fällt ask aus oder antwortet zu langsam, läuft alles ohne Recherche weiter.
+
+**Einrichten:** `ask.example.json` nach `data/ask.json` kopieren und ausfüllen:
+
+| Feld | Inhalt |
+| --- | --- |
+| `url` | Basis-Adresse der API bis und mit `/v1` (der Kiosk hängt `/chat/completions` und `/models` an) |
+| `apiKey` | API-Schlüssel, wird als `Authorization: Bearer …` gesendet |
+| `model` | Modellname, z.B. `qwen3.8-flash-next` |
+| `searchExtra` | Zusätzliche Felder, mit denen ask die Websuche einschaltet, z.B. `{ "web_search": true }` oder `{ "tools": [{ "type": "web_search" }] }`, je nach ask |
+| `planExtra` | Zusätzliche Felder für den Prüf-Schritt, z.B. um «Thinking» abzuschalten |
+| `timeoutMs` | Höchstwartezeit für die Recherche, Standard 25000 |
+
+Alternativ gehen Umgebungsvariablen: `ASK_URL`, `ASK_KEY`, `ASK_MODEL`. Änderungen an `data/ask.json` gelten sofort, ohne Neustart. Ob ask erreichbar ist, zeigt das Betreuer-Menü. Dort lässt sich die Recherche auch ganz abschalten, Besucher können sie in den Profi-Einstellungen ausschalten.
 
 ## Betreuer-Menü
 

@@ -273,6 +273,9 @@ textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--tf-blue); }
 .overlay-body::-webkit-scrollbar-track { background: transparent; }
 .overlay-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .7); }
 .overlay-body p { margin: 0; }
+.overlay-body p + p { margin-top: 8px; }
+.overlay-body .overlay-sub { font-weight: 700; font-size: 19px; }
+.overlay-body .overlay-sub:not(:first-child) { margin-top: 20px; }
 .overlay-body .lang { margin-top: 14px; font-size: 16px; }
 
 .tech-list { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; margin: 0; }

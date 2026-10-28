@@ -105,6 +105,7 @@
         </div>
         <div class="bar"><div class="bar-fill" id="barFill"></div></div>
         <div class="phases">
+          <span data-phase="research" hidden>Recherche</span>
           <span data-phase="text">Beschreibung</span>
           <span data-phase="image">Bild malen</span>
           <span data-phase="done">Fertig</span>
@@ -200,6 +201,17 @@
             <button type="button" role="radio" data-value="false" aria-checked="false">Aus</button>
           </div>
         </div>
+
+        <div class="setting" id="proResearchRow">
+          <div class="setting-text">
+            <span class="setting-name">Recherche im Web</span>
+            <span class="setting-help">Bei bestimmten Orten, Bauwerken oder Fahrzeugen schlägt die KI zuerst im Web nach, wie sie aussehen. Dauert ein paar Sekunden länger.</span>
+          </div>
+          <div class="segments" id="proResearch">
+            <button type="button" role="radio" data-value="true" aria-checked="true">An</button>
+            <button type="button" role="radio" data-value="false" aria-checked="false">Aus</button>
+          </div>
+        </div>
       </div>
       <div class="modal-foot">
         <button class="link-btn" id="proReset" type="button">Alles zurücksetzen</button>
@@ -261,6 +273,12 @@
             </div>
             <div class="admin-row"><span>Besucherbilder im Schoner</span>
               <div class="segments" id="aShowRecent">
+                <button type="button" role="radio" data-value="true">An</button>
+                <button type="button" role="radio" data-value="false">Aus</button>
+              </div>
+            </div>
+            <div class="admin-row"><span>Recherche mit ask (automatisch)</span>
+              <div class="segments" id="aResearch">
                 <button type="button" role="radio" data-value="true">An</button>
                 <button type="button" role="radio" data-value="false">Aus</button>
               </div>
