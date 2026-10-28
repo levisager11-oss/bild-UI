@@ -52,3 +52,18 @@ Rahmen:
 - Ausführlichere Texte gewinnen bei Foto (natürlicheres Licht), Comic (Halbton, kräftiger), Aquarell (Papier, Pigment), Ölbild (Impasto), Bausteine (alles aus Steinen statt nur Figur), Skizze (Schraffur), 3D (gleichwertig).
 - Pixel-Art: alte Fassung bei der Gasse blockiger → neue Fassung mit «large, clearly visible square pixels».
 - **Entscheid:** neue STYLES übernommen.
+
+### 11 Echte Varianten (24 Bilder)
+- 4 Bilder mit je eigener Beschreibung: **4 deutlich verschiedene Bildaufbauten** (vorher fast identisch). «Nochmal» (variation): jedes Mal neues Bild. Verzweigung mit Referenzfoto funktioniert (Unterschiede kleiner, Foto gibt Turm vor).
+- Zeiten (GPU): 2 Bilder 1,5 MP ≈ 39–40 s · 4 Bilder 1 MP ≈ 61–63 s · 2 Bilder mit Referenz ≈ 46 s · 1 Bild 2 MP ≈ 21–24 s.
+
+### 06 Besucher-Eingaben (12 Bilder, 2 MP)
+- Gut: Tippfehler («pizza bakt in einer kuche»), Französisch, Englisch, Anzahlen (3 rote Ballone + 2 gelbe Enten korrekt), langer Wunsch (alle Details), Text «TF Bern», Einhorn, abstrakt.
+- Mundart «e chatz wo uf em velo dür bärn fahrt»: verstanden, aber Katze sitzt hinten auf dem Velo statt selbst zu fahren.
+- «Hund»: Hund auf einer «Kiosk-Theke» → Ursache: Zusatzregel begann mit «Kiosk rule:» → umformuliert («Additional rule:»).
+- «Explosionszeichnung eines Elektromotors»: als echte Explosion mit Feuer gedeutet (Sprachproblem des Upsamplers) → im Bericht erwähnen.
+
+## Stand bei Abbruch (Nutzungslimit, ca. 00:45)
+- Übernommen in server.js/app.js: er_sde, Qualitätsstufen (maximal = 2 MP bei 1 Bild), neue STYLES, Regel gegen Fantasie-Schrift, echte Varianten («Nochmal» + eigene Beschreibung pro Bild), besserer ask-Prüf-Schritt, ask-Zwischenspeicher.
+- Läuft noch im Hintergrund (Ergebnisse im Scratchpad, nicht ausgewertet): 07 echte Motive mit/ohne Recherche+Foto, 05 alle Prompt-Ideen, 08 Formate/4 Varianten.
+- Offen: 07/05/08 auswerten, schwache Prompt-Ideen ersetzen, Beispielbilder für den Bildschirmschoner neu erstellen, Zeitangabe auf der Startseite anpassen («in wenigen Sekunden» → ca. 25 s), README ergänzen, Bericht-Seite.

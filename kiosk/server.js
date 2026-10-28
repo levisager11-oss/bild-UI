@@ -490,10 +490,11 @@ const QUALITY = {
   },
   // Appended to the upsampler system prompt. Without it the upsampler often invents signs, chalkboards
   // and labels whose lettering comes out garbled (tested); requested text still works.
+  // Do not mention the kiosk here: an earlier wording put a kiosk counter into a dog picture.
   // Upsampler sampling for variations ("Nochmal" and image 2..4): greedy gives the same caption every time,
   // and with the same caption new seeds only make near-identical images (tested).
   variation: { temperature: 0.7, top_k: 40, top_p: 0.9, min_p: 0.05 },
-  systemExtra: 'Kiosk rule: add no signs, labels, logos, brand names or written words of your own. Only when the request itself asks for text, render exactly that text.',
+  systemExtra: 'Additional rule: add no signs, labels, logos, brand names or written words of your own. Only when the request itself asks for text, render exactly that text.',
 };
 const LAB = process.env.KIOSK_LAB === '1';
 
