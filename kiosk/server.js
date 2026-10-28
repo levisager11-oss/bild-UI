@@ -28,16 +28,17 @@ const FORMATS = {
   landscape: { width: 1216, height: 832, canvas: '3:2' },
 };
 
-// Style buttons. Keys match public/app.js.
+// Style buttons. Keys match public/app.js. The longer texts won against short ones in a test (2026-10-29):
+// clearer watercolor paper, visible brush strokes, hatching, objects really built from bricks.
 const STYLES = {
-  foto: 'a realistic photograph',
-  comic: 'a colorful comic illustration with bold black outlines',
-  aquarell: 'a soft watercolor painting on textured paper',
-  oel: 'an oil painting with visible brush strokes',
-  pixel: 'retro pixel art like an 8-bit video game',
-  bausteine: 'a scene built entirely from colorful plastic toy bricks',
-  skizze: 'a pencil sketch on white paper',
-  render: 'a cute stylized 3D render with soft studio lighting',
+  foto: 'a high-quality professional photograph with natural light, realistic textures and sharp focus',
+  comic: 'a vibrant comic book illustration with bold black ink outlines, flat bright colors and halftone shading',
+  aquarell: 'a delicate watercolor painting on textured paper with soft color washes, pigment blooms and white paper showing through',
+  oel: 'a classical oil painting on canvas with rich colors and thick, visible impasto brush strokes',
+  pixel: 'retro 16-bit pixel art with large, clearly visible square pixels and a limited color palette, like a scene from a classic video game',
+  bausteine: 'a scene built entirely from colorful plastic toy bricks, every object made of bricks, macro photograph with shallow depth of field',
+  skizze: 'a detailed graphite pencil sketch on white paper with cross-hatching and visible pencil strokes, black and white',
+  render: 'a cute stylized 3D animated-film render with soft studio lighting, smooth rounded shapes and rich colors',
 };
 
 const DEFAULT_SETTINGS = {
@@ -184,16 +185,22 @@ function parseJsonAnswer(text) {
   }
 }
 
-const PLAN_PROMPT = `You help an image generator at a school open day. Decide whether drawing the user's image request well needs factual knowledge about specific real-world things that an image model may not know exactly: named places, landmarks and buildings, specific vehicles or machines, animal or plant species, artworks, traditions, historical or recent events, specific products.
-Generic scenes do not need it (a cat with a welding helmet, a robot in a workshop, a city of the future, a dragon made of gears).
-Also name the single most important specific real-world thing, if there is one, so a reference photo can be taken from Wikipedia.
+const PLAN_PROMPT = `You help an image generator at a school open day. The request may be in German, Swiss German dialect, French, English or with typos.
+Decide whether drawing it well needs factual knowledge about a specific real-world thing that an image model may not know exactly:
+- named places, landmarks, buildings, bridges, mountains, rivers and lakes
+- specific vehicles, machines and products, also by brand or model (a Vespa, a Swiss army knife, an SBB Re 460)
+- animal and plant species that are not everyday animals (a bearded vulture, an ibex, an axolotl, an edelweiss)
+- artworks, traditions, historical or recent events
+Everyday things and generic scenes do NOT need it: a cat, a dog, a fox, a horse, a cow, a penguin, a robot in a workshop, a city of the future, a dragon made of gears, a unicorn.
+A city or country that is only the setting (a cat cycling through Bern) does not need it either. Never add a landmark the request does not name.
+If research is needed, name the single most important thing so a reference photo can be taken from Wikipedia.
 Reply with JSON only:
 {"needed": true or false,
- "query": "short web search query that finds what the specific thing looks like",
+ "query": "short web search query that finds what the thing looks like",
  "wiki": "exact title of the German Wikipedia article about that thing, or empty",
  "subject": "short English name of that thing, e.g. the Zytglogge clock tower, or empty",
- "person": true if that thing is a real person or a group of real people,
- "transform": true if the request turns that thing into something else or changes its form (e.g. as a spaceship, made of chocolate, as a robot), false if it is shown as it is}`;
+ "person": true if the request shows a real, named person or a group of real people (e.g. Roger Federer, the Swiss Federal Council, a famous band),
+ "transform": true if the request turns that thing into something else or changes its form (e.g. as a spaceship, made of chocolate, as a robot, built from bricks), false if it is shown as it is, also when only a drawing style is asked}`;
 
 const SEARCH_PROMPT = `Research the visual appearance of the specific real-world things in an image request. Use the web search.
 Then reply with JSON only: {"facts": "3 to 6 short English sentences with visual facts only: shape, colors, materials, size, typical surroundings, distinctive details", "sources": [{"title": "page title", "url": "https://..."}]}.
@@ -263,6 +270,19 @@ async function researchModel(prompt, query) {
   return { facts: String(facts || '').trim(), sources: [...attached, ...((answer && Array.isArray(answer.sources)) ? answer.sources : [])] };
 }
 
+// Successful ask answers per request, kept for 1 hour: ideas get tapped again and again,
+// and "Nochmal" should not wait for ask a second time.
+const ASK_CACHE_MS = 60 * 60 * 1000;
+const askCache = new Map();
+function cached(key) {
+  const hit = askCache.get(key);
+  return hit && Date.now() - hit.at < ASK_CACHE_MS ? hit.value : null;
+}
+function remember(key, value) {
+  if (askCache.size > 500) askCache.delete(askCache.keys().next().value);
+  askCache.set(key, { at: Date.now(), value });
+}
+
 async function handleResearchPlan(req, res) {
   let body;
   try {
@@ -273,8 +293,14 @@ async function handleResearchPlan(req, res) {
   const prompt = String(body.prompt || '').trim().slice(0, 1000);
   if ((!settings.research && !settings.reference) || !askConfig().configured || !prompt) return sendJson(res, 200, { needed: false, off: true });
   try {
-    const { text } = await askChat(PLAN_PROMPT, prompt, askConfig().planExtra, 8000);
-    const plan = parseJsonAnswer(text) || {};
+    const key = 'plan:' + prompt.toLowerCase();
+    let plan = cached(key);
+    if (!plan) {
+      const { text } = await askChat(PLAN_PROMPT, prompt, askConfig().planExtra, 8000);
+      plan = parseJsonAnswer(text);
+      if (!plan) throw new Error('ask lieferte kein JSON');
+      remember(key, plan);
+    }
     const query = String(plan.query || '').trim().slice(0, 200);
     const wiki = settings.reference && plan.person !== true ? String(plan.wiki || '').trim().slice(0, 150) : '';
     sendJson(res, 200, {
@@ -305,6 +331,9 @@ async function handleResearchRun(req, res) {
   const t0 = Date.now();
   try {
     const c = askConfig();
+    const key = `run:${prompt.toLowerCase()}|${query.toLowerCase()}`;
+    const hit = cached(key);
+    if (hit) return sendJson(res, 200, { ...hit, ms: Date.now() - t0, cached: true });
     const result = c.search === 'model' ? await researchModel(prompt, query) : await researchOpenWebUI(prompt, query);
     const facts = result.facts.slice(0, 1200);
     const seen = new Set();
@@ -312,7 +341,9 @@ async function handleResearchRun(req, res) {
       .filter((s) => s && /^https?:\/\//.test(s.url || '') && !seen.has(s.url) && seen.add(s.url))
       .slice(0, 4)
       .map((s) => ({ title: String(s.title || '').slice(0, 120), url: String(s.url).slice(0, 300) }));
-    sendJson(res, 200, { facts: facts || null, sources, ms: Date.now() - t0, model: askConfig().model });
+    const payload = { facts: facts || null, sources, model: askConfig().model };
+    if (payload.facts) remember(key, payload);
+    sendJson(res, 200, { ...payload, ms: Date.now() - t0 });
   } catch (e) {
     console.error('ask research failed:', errText(e));
     sendJson(res, 200, { facts: null, error: true });
@@ -457,7 +488,12 @@ const QUALITY = {
     temperature: 1.0, top_k: 1, top_p: 0.95, min_p: 0.0, repetition_penalty: 1.05, presence_penalty: 1.5,
     thinking: false, max_length: 3584,
   },
-  systemExtra: '',            // appended to the upsampler system prompt
+  // Appended to the upsampler system prompt. Without it the upsampler often invents signs, chalkboards
+  // and labels whose lettering comes out garbled (tested); requested text still works.
+  // Upsampler sampling for variations ("Nochmal" and image 2..4): greedy gives the same caption every time,
+  // and with the same caption new seeds only make near-identical images (tested).
+  variation: { temperature: 0.7, top_k: 40, top_p: 0.9, min_p: 0.05 },
+  systemExtra: 'Kiosk rule: add no signs, labels, logos, brand names or written words of your own. Only when the request itself asks for text, render exactly that text.',
 };
 const LAB = process.env.KIOSK_LAB === '1';
 
@@ -477,7 +513,7 @@ function sizeFor(f, megapixels) {
   return { width: r16(f.width), height: r16(f.height) };
 }
 
-function buildWorkflow({ prompt, format, style, variants, advanced, facts, reference, lab }) {
+function buildWorkflow({ prompt, format, style, variants, advanced, facts, reference, lab, variation }) {
   const f = FORMATS[format] || FORMATS.square;
   const wf = structuredClone(WORKFLOW);
   const adv = cleanAdvanced(advanced);
@@ -487,7 +523,12 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
   const steps = L.steps || adv.steps;
   const sampler = L.sampler || adv.sampler;
   const seed = L.seed ?? adv.seed ?? randomSeed();
-  const textSeed = L.textSeed ?? randomSeed();
+  // With greedy decoding (top_k 1) the upsampler seed changes nothing, so keep it fixed:
+  // ComfyUI then reuses the caption for the same request, e.g. "Nochmal" saves about 8 s.
+  const baseText = variation ? { ...q.text, ...q.variation } : q.text;
+  const textSeed = L.textSeed ?? (baseText.top_k === 1 ? 0 : randomSeed());
+  // Several images: each gets its own caption (image 1 as usual, the others as variations), otherwise they look alike.
+  const separate = adv.upsampler && variants > 1 && q.scheduler !== 'flux2' && !(q.hires && q.hires.scale > 1) && !L.batch;
   const level = QUALITY_LEVELS[settings.quality] || QUALITY_LEVELS.maximal;
   const { width, height } = sizeFor(f, q.megapixels ?? level[variants] ?? 1.0);
   const factText = facts ? `Visual reference facts from a web search (use them to depict the named things accurately, do not render them as text): ${facts}` : '';
@@ -526,7 +567,7 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
       if (factText) request += `\n${factText}`;
       system = SYSTEM_PROMPT;
     }
-    const t = q.text;
+    const t = baseText;
     Object.assign(wf['11'].inputs, {
       prompt: request,
       system_prompt: q.systemExtra ? `${system}\n${q.systemExtra}` : system,
@@ -549,7 +590,7 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
 
   wf['6'].inputs.width = width;
   wf['6'].inputs.height = height;
-  wf['6'].inputs.batch_size = variants;
+  wf['6'].inputs.batch_size = separate ? 1 : variants;
 
   // Main sampling pass. Node id 7 stays the sampler, the page shows its progress.
   if (q.scheduler === 'flux2') {
@@ -583,6 +624,33 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
     wf['9'].inputs.images = ['47', 0];
   }
 
+  if (separate) {
+    // Copy the caption -> encode -> sample -> decode chain for images 2..n, each with a varied caption.
+    const chain = ['11', '4', '6', '7', '8', ...(reference ? ['21', '22'] : [])];
+    const decoded = [['8', 0]];
+    for (let k = 1; k < variants; k++) {
+      const id = (n) => `${n}_${k}`;
+      for (const n of chain) {
+        const node = structuredClone(wf[n]);
+        for (const [key, val] of Object.entries(node.inputs)) {
+          if (Array.isArray(val) && chain.includes(val[0])) node.inputs[key] = [id(val[0]), val[1]];
+        }
+        wf[id(n)] = node;
+      }
+      Object.assign(wf[id('11')].inputs, {
+        'sampling_mode.temperature': q.variation.temperature,
+        'sampling_mode.top_k': q.variation.top_k,
+        'sampling_mode.top_p': q.variation.top_p,
+        'sampling_mode.min_p': q.variation.min_p,
+        'sampling_mode.seed': randomSeed(),
+      });
+      wf[id('7')].inputs.seed = seed + k;
+      decoded.push([id('8'), 0]);
+    }
+    wf['24'] = { class_type: 'BatchImagesNode', inputs: Object.fromEntries(decoded.map((d, i) => [`images.image${i}`, d])) };
+    wf['9'].inputs.images = q.sharpen > 0 ? wf['9'].inputs.images : ['24', 0];
+  }
+
   const hiresSize = q.hires && q.hires.scale > 1
     ? { width: Math.round((width * q.hires.scale) / 16) * 16, height: Math.round((height * q.hires.scale) / 16) * 16 } : null;
   return {
@@ -595,6 +663,8 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
       width: hiresSize ? hiresSize.width : width,
       height: hiresSize ? hiresSize.height : height,
       hires: !!hiresSize,
+      separateCaptions: separate,
+      variation: !!variation,
       variants,
       upsampler: adv.upsampler,
       model: wf['1'].inputs.unet_name.replace('.safetensors', ''),
@@ -655,7 +725,7 @@ async function handleGenerate(req, res) {
   const reference = settings.reference && r && typeof r.name === 'string' && knownReference(r.name)
     ? { name: r.name, subject: String(r.subject || 'the main subject').slice(0, 100), transform: r.transform === true }
     : null;
-  const { workflow, info } = buildWorkflow({ prompt, format: body.format, style: body.style, variants, advanced: body.advanced, facts, reference, lab: body.lab });
+  const { workflow, info } = buildWorkflow({ prompt, format: body.format, style: body.style, variants, advanced: body.advanced, facts, reference, lab: body.lab, variation: body.variation === true });
   try {
     const r = await comfyPost('/prompt', {
       prompt: workflow,

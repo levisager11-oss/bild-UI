@@ -1,0 +1,12 @@
+{
+  "name": "10 Abwechslung bei «Nochmal»: gleiche Beschreibung, 4 Seeds, 2 MP",
+  "seeds": [10101, 10202, 10303, 10404],
+  "prompts": [
+    { "key": "pinguin", "prompt": "Ein Pinguin als Koch in einer grossen Küche" },
+    { "key": "bibliothek", "prompt": "Eine Bibliothek in einem alten Baum" },
+    { "key": "zug", "prompt": "Ein Zug aus Legosteinen fährt durch die Alpen", "format": "landscape" }
+  ],
+  "variants": [
+    { "key": "best", "lab": { "textSeed": 0 } }
+  ]
+}

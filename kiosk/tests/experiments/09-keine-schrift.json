@@ -1,0 +1,16 @@
+{
+  "name": "09 Zusatz gegen ungewollte Schrift im Bild",
+  "seeds": [9101, 9202],
+  "prompts": [
+    { "key": "roboter", "prompt": "Ein Roboter, der in einer Werkstatt ein Velo repariert" },
+    { "key": "baumhaus", "prompt": "Eine Bibliothek in einem alten Baum" },
+    { "key": "hamster", "prompt": "Ein Hamster als Pilot in einem kleinen Propellerflugzeug" },
+    { "key": "baeckerei", "prompt": "Eine gemütliche Bäckerei am Morgen" },
+    { "key": "schild", "prompt": "Ein Holzschild mit der Aufschrift «Tag der offenen Tür» vor einer Werkstatt" },
+    { "key": "tshirt", "prompt": "Ein T-Shirt mit dem Aufdruck «TF Bern»" }
+  ],
+  "variants": [
+    { "key": "ohne", "lab": { "megapixels": 1.0 } },
+    { "key": "keine-schrift", "lab": { "megapixels": 1.0, "systemExtra": "Kiosk rule: add no signs, labels, logos, brand names or written words of your own. Only when the request itself asks for text, render exactly that text." } }
+  ]
+}

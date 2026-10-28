@@ -23,3 +23,32 @@ Rahmen:
 - Verfeinerungs-Durchgang (Latent hochskalieren + denoise 0,35/0,5): behält Bildaufbau, schärfer, aber langsamer als natives 1,5 MP → nicht nötig.
 - 24 statt 16 Schritte: kaum Unterschied. Nachschärfen (ImageSharpen 0,3): wirkt künstlich → aus.
 - **Entscheid:** 1 Bild 2 MP, 2 Bilder 1,5 MP, 4 Bilder 1 MP; Betreuer-Menü-Stufe «Bildqualität» (schnell/hoch/maximal).
+
+### Prüf-Schritt von ask (tests/plan-check.js, 40 Fälle, ohne GPU)
+- Vorher 35/40: Steinbock, Axolotl nicht erkannt; Taschenmesser (Produkt) nicht; «Der Bundesrat» nicht als Personen; Mundart «e chatz uf em velo dür bärn» → erfand Zytglogge.
+- PLAN_PROMPT neu: Sprachen/Mundart/Tippfehler erwähnt, Kategorien mit Beispielen (Marken/Produkte, nicht alltägliche Tierarten), Alltägliches ausdrücklich ausgenommen, Stadt nur als Kulisse braucht nichts, nie Wahrzeichen dazu erfinden, Personengruppen.
+- Nachher 39/40, 39/40, 38/40 (3 Läufe). Rest: Murmeltier gilt als «alltäglich» (vertretbar), Steinbock → Artikel «Steinwild» (korrekt).
+
+### 03 Prompt-Verbesserer (48 Bilder, 1 MP)
+- Bisher top_k 1 = **greedy**: gleicher Text → immer gleiche Beschreibung (nur Bild-Seed ändert bei «Nochmal»).
+- Sampling (temp 0,7/top_k 40 bzw. 1,0/64): Beschreibungen variieren, Qualität nicht besser, **öfter ungewollte Schrift** im Bild («TARGET», «BIBLIOTHEK», «PILOT»).
+- thinking=true: **leere Beschreibung** → unbrauchbar. mtp=auto: identischer Text, gleiche Zeit (keine MTP-Gewichte) → nutzlos. presence 0: etwas kürzer, sonst gleich.
+- **Entscheid: greedy bleibt.** Zukunftsstadt: Seilbahnen stehen in der Beschreibung, sind bei 1 MP aber zu klein → 2 MP hilft.
+- Folge-Versuch 09: Zusatzregel gegen eigene Schrift/Schilder.
+- Optimierung: bei greedy ist der Text-Seed egal → fest 0, damit ComfyUI die Beschreibung wiederverwendet («Nochmal» ≈ 8 s schneller).
+
+### 09 Zusatzregel gegen ungewollte Schrift (24 Bilder, 1 MP)
+- Regel: «add no signs, labels, logos, brand names or written words of your own. Only when the request itself asks for text, render exactly that text.»
+- Ohne Regel: Bäckerei mit Kreidetafel voller verwaschener Schrift (beide Seeds), Fähnchen mit Schrift. Mit Regel: weg.
+- Gewünschter Text («Tag der offenen Tür», «TF Bern») funktioniert weiter; Schild-Schrift mit Regel eine Spur weniger sauber.
+- **Entscheid: Regel als Standard** (QUALITY.systemExtra).
+
+### 10 Abwechslung bei «Nochmal» (12 Bilder, 2 MP)
+- Gleiche (greedy) Beschreibung + 4 Seeds → **fast identische Bilder** (Pinguin, Bibliothek, Lego-Zug). Auch 2/4 Bilder in einem Batch sähen gleich aus.
+- **Entscheid:** «Nochmal» = neue Beschreibung mit Sampling (temp 0,7, top_k 40, top_p 0,9, min_p 0,05, Zufalls-Seed). Bei 2/4 Bildern bekommt jedes Bild eine eigene Beschreibung (1. greedy, weitere Varianten) statt eines Batches. Kostet ≈ 8 s pro zusätzlichem Bild für die Beschreibung.
+- 2 MP-Bild hier ≈ 23–24 s statt 15 s (lief parallel zu 04; Zeiten mit Vorsicht).
+
+### 04 Stile (96 Bilder, 1 MP): heutige vs. ausführlichere Stil-Texte
+- Ausführlichere Texte gewinnen bei Foto (natürlicheres Licht), Comic (Halbton, kräftiger), Aquarell (Papier, Pigment), Ölbild (Impasto), Bausteine (alles aus Steinen statt nur Figur), Skizze (Schraffur), 3D (gleichwertig).
+- Pixel-Art: alte Fassung bei der Gasse blockiger → neue Fassung mit «large, clearly visible square pixels».
+- **Entscheid:** neue STYLES übernommen.

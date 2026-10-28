@@ -27,11 +27,24 @@ const results = fs.existsSync(resultsFile) ? JSON.parse(fs.readFileSync(resultsF
 const cacheFile = path.join(path.dirname(path.resolve(outDir)), 'research-cache.json');
 const cache = fs.existsSync(cacheFile) ? JSON.parse(fs.readFileSync(cacheFile, 'utf8')) : {};
 
-const post = async (url, body) => {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Retries while the lab server restarts (connection refused); other errors go through.
+async function retry(fn) {
+  for (let i = 0; ; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i >= 20 || !/fetch failed|ECONNREFUSED|ECONNRESET/.test(e.message + (e.cause ? e.cause.code : ''))) throw e;
+      await sleep(3000);
+    }
+  }
+}
+const post = (url, body) => retry(async () => {
   const r = await fetch(base + url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   return r.json();
-};
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+});
+const getJson = (url) => retry(async () => (await fetch(base + url)).json());
+const getBuf = (url) => retry(async () => Buffer.from(await (await fetch(base + url)).arrayBuffer()));
 
 // Plan, research and reference once per prompt text; reused across runs.
 async function prepare(p) {
@@ -59,7 +72,7 @@ async function prepare(p) {
 
 async function waitFor(promptId) {
   for (let i = 0; i < 600; i++) {
-    const h = (await (await fetch(`${base}/comfy/history/${promptId}`)).json())[promptId];
+    const h = (await getJson(`/comfy/history/${promptId}`))[promptId];
     if (h && h.status && (h.status.completed || h.status.status_str === 'error')) return h;
     await sleep(700);
   }
@@ -84,7 +97,7 @@ function gpuSeconds(h) {
         const id = `${p.key}__${v.key}__${seed}`;
         const file = path.join(outDir, id + '.png');
         if (fs.existsSync(file) && results[id]) continue; // resume
-        const lab = { seed, textSeed: seed + 7, ...(v.lab || {}), ...(p.lab || {}) };
+        const lab = { seed, ...(v.variation || p.variation || (p.variants || 1) > 1 ? {} : { textSeed: seed + 7 }), ...(v.lab || {}), ...(p.lab || {}) };
         if (v.lab && v.lab.text) lab.text = { ...v.lab.text };
         const body = {
           prompt: v.prompt || p.prompt,
@@ -94,6 +107,7 @@ function gpuSeconds(h) {
           clientId: 'bench',
           lab,
           advanced: { steps: lab.steps || 16, sampler: lab.sampler || 'euler', upsampler: v.upsampler !== false, ...(v.advanced || {}) },
+          variation: !!(v.variation || p.variation),
           facts: v.noFacts ? null : prep.facts || null,
           reference: v.noReference ? null : prep.reference || null,
         };
@@ -103,10 +117,10 @@ function gpuSeconds(h) {
           const h = await waitFor(g.promptId);
           if (h.status.status_str === 'error') throw new Error(JSON.stringify(h.status.messages).slice(0, 600));
           const imgs = h.outputs['9'].images;
-          const buf = Buffer.from(await (await fetch(`${base}/comfy/view?` + new URLSearchParams(imgs[0]))).arrayBuffer());
+          const buf = await getBuf('/comfy/view?' + new URLSearchParams(imgs[0]));
           fs.writeFileSync(file, buf);
           for (let k = 1; k < imgs.length; k++) {
-            fs.writeFileSync(path.join(outDir, `${id}__${k}.png`), Buffer.from(await (await fetch(`${base}/comfy/view?` + new URLSearchParams(imgs[k]))).arrayBuffer()));
+            fs.writeFileSync(path.join(outDir, `${id}__${k}.png`), await getBuf('/comfy/view?' + new URLSearchParams(imgs[k])));
           }
           results[id] = {
             prompt: p.key, variant: v.key, seed, gpu: gpuSeconds(h), info: g.info,

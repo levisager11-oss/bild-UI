@@ -331,7 +331,8 @@
   }
 
   // ---------- Generate ----------
-  async function generate(prompt) {
+  // variation: true for "Nochmal", the upsampler then writes a new caption, so the picture really changes.
+  async function generate(prompt, variation = false) {
     prompt = (prompt || '').trim();
     if (!prompt) {
       showError('Schreib zuerst, was auf dem Bild sein soll, oder tippe auf «Würfeln».');
@@ -374,7 +375,7 @@
       const reference = current.reference
         ? { name: current.reference.name, subject: current.reference.subject, transform: current.reference.transform }
         : null;
-      const data = await postJson('/api/generate', { prompt, format, style, variants: count, advanced: adv, facts, reference, clientId });
+      const data = await postJson('/api/generate', { prompt, format, style, variants: count, advanced: adv, facts, reference, variation, clientId });
       if (current !== job || current.done) {
         ignoredIds.add(data.promptId);
         fetch('/api/cancel/' + data.promptId, { method: 'POST' }).catch(() => {});
@@ -671,38 +672,51 @@
     if (!job.id) job.id = data.prompt_id;
     const now = performance.now();
     const t = job.t;
-    const textLabel = 'Die KI schreibt eine Bildbeschreibung';
-    const imageLabel = job.count > 1 ? `Die ${job.count} Bilder entstehen` : 'Das Bild entsteht';
+    // Several images get their own caption chain on the server: node ids 11_1, 7_1, 8_1 ... for image 2 and on.
+    const n = job.count > 1 && job.upsampler ? job.count : 1;
+    const [node, branch] = String(data.node || '').split('_');
+    const idx = branch ? Number(branch) : 0;
+    const textLabel = n > 1 ? `Die KI beschreibt Bild ${idx + 1} von ${n}` : 'Die KI schreibt eine Bildbeschreibung';
+    const imageLabel = n > 1 ? `Bild ${idx + 1} von ${n} entsteht` : job.count > 1 ? `Die ${job.count} Bilder entstehen` : 'Das Bild entsteht';
+    // Progress: one slot per image, each half text, half image.
+    const at = (phase, f) => {
+      if (n === 1) return frac(phase, f);
+      const a0 = frac('text', 0);
+      const local = phase === 'text' ? f * 0.5 : 0.5 + f * 0.5;
+      return a0 + (0.95 - a0) * ((idx + local) / n);
+    };
 
     switch (type) {
       case 'execution_start':
         job.started = true;
         t.start = now;
-        if (job.upsampler) setProgress(textLabel, '', frac('text', 0), 'text');
-        else setProgress(imageLabel, '', frac('image', 0), 'image');
+        if (job.upsampler) setProgress(textLabel, '', at('text', 0), 'text');
+        else setProgress(imageLabel, '', at('image', 0), 'image');
         break;
       case 'executing':
-        if (data.node === NODE_UPSAMPLER) {
-          t.textStart = now;
-          setProgress(textLabel, '', frac('text', 0), 'text');
-        } else if (data.node === NODE_ENCODE) {
-          if (t.textStart && !t.textEnd) t.textEnd = now;
-        } else if (data.node === NODE_SAMPLER) {
-          if (t.textStart && !t.textEnd) t.textEnd = now;
-          t.imageStart = now;
-          setProgress(imageLabel, '', frac('image', 0), 'image');
-        } else if (data.node === NODE_DECODE) {
-          t.imageEnd = now;
-          setProgress(job.count > 1 ? 'Die Bilder werden fertiggestellt' : 'Fast fertig', '', 0.96, 'image');
+        if (node === NODE_UPSAMPLER) {
+          if (idx === 0) t.textStart = now;
+          setProgress(textLabel, '', at('text', 0), 'text');
+        } else if (node === NODE_ENCODE) {
+          if (idx === 0 && t.textStart && !t.textEnd) t.textEnd = now;
+        } else if (node === NODE_SAMPLER) {
+          if (idx === 0 && t.textStart && !t.textEnd) t.textEnd = now;
+          if (idx === 0) t.imageStart = now;
+          setProgress(imageLabel, '', at('image', 0), 'image');
+        } else if (node === NODE_DECODE) {
+          if (idx === n - 1) {
+            t.imageEnd = now;
+            setProgress(job.count > 1 ? 'Die Bilder werden fertiggestellt' : 'Fast fertig', '', 0.96, 'image');
+          }
         }
         break;
       case 'progress':
-        if (data.node === NODE_UPSAMPLER) {
-          job.tokens = data.value;
+        if (node === NODE_UPSAMPLER) {
+          if (idx === 0) job.tokens = data.value;
           // Captions are usually 200 to 450 tokens.
-          setProgress(textLabel, `${data.value} Textbausteine`, frac('text', Math.min(data.value / 420, 0.95)), 'text');
-        } else if (data.node === NODE_SAMPLER) {
-          setProgress(imageLabel, `Schritt ${data.value} von ${data.max}`, frac('image', data.value / data.max), 'image');
+          setProgress(textLabel, `${data.value} Textbausteine`, at('text', Math.min(data.value / 420, 0.95)), 'text');
+        } else if (node === NODE_SAMPLER) {
+          setProgress(imageLabel, `Schritt ${data.value} von ${data.max}`, at('image', data.value / data.max), 'image');
         }
         break;
       case 'executed':
@@ -1097,7 +1111,7 @@
   el.counts.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => setCount(Number(b.dataset.count))));
   el.generate.addEventListener('click', () => generate(el.prompt.value));
   el.cancel.addEventListener('click', cancelJob);
-  el.again.addEventListener('click', () => generate(job ? job.prompt : el.prompt.value));
+  el.again.addEventListener('click', () => generate(job ? job.prompt : el.prompt.value, true));
   el.showAll.addEventListener('click', showGrid);
   el.showCaption.addEventListener('click', () => toggleOverlay('caption'));
   el.showTech.addEventListener('click', () => toggleOverlay('tech'));

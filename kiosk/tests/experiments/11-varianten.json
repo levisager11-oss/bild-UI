@@ -1,0 +1,13 @@
+{
+  "name": "11 Echte Varianten: «Nochmal» und eigene Beschreibung pro Bild",
+  "seeds": [11101, 11202, 11303],
+  "prompts": [
+    { "key": "pinguin-nochmal", "prompt": "Ein Pinguin als Koch in einer grossen Küche", "variation": true },
+    { "key": "bibliothek-2", "prompt": "Eine Bibliothek in einem alten Baum", "variants": 2, "lab": { "seed": 11101 } },
+    { "key": "bibliothek-4", "prompt": "Eine Bibliothek in einem alten Baum", "variants": 4, "lab": { "seed": 11101 } },
+    { "key": "zytglogge-2", "prompt": "Der Zytglogge im Winter bei Nacht", "variants": 2, "research": true, "reference": true, "lab": { "seed": 11101 } }
+  ],
+  "variants": [
+    { "key": "neu", "lab": {} }
+  ]
+}
