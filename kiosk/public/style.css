@@ -189,12 +189,15 @@ textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--tf-blue); }
   display: flex; align-items: center; justify-content: center;
   overflow: hidden;
 }
-.frame { position: relative; }
+.frame { position: relative; --spickel: 48px; }
+/* With the caption open, cut the image at the same corner so no image shows through the box's cut. */
+.frame:has(.caption:not([hidden])) {
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--spickel)), calc(100% - var(--spickel)) 100%, 0 100%);
+}
 .frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 /* The box itself never scrolls, so the scrollbar stays clear of the Spickel cut. */
 .caption {
-  --spickel: 48px;
   position: absolute; left: 0; right: 0; bottom: 0;
   max-height: 70%;
   display: flex;
@@ -216,8 +219,8 @@ textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--tf-blue); }
 /* Chrome/Edge: plain bar without arrow buttons */
 .caption-text::-webkit-scrollbar { width: 6px; }
 .caption-text::-webkit-scrollbar-button { display: none; height: 0; }
-.caption-text::-webkit-scrollbar-track { background: var(--tf-blue-80); }
-.caption-text::-webkit-scrollbar-thumb { background: var(--tf-white); }
+.caption-text::-webkit-scrollbar-track { background: transparent; }
+.caption-text::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .7); }
 .caption-text .lang { display: block; margin-top: 14px; font-size: 16px; color: var(--tf-white); }
 
 /* ---------- Progress ---------- */
