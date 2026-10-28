@@ -1,0 +1,80 @@
+/* TF Bern — Colors & Typography
+   Source: Corporate Design Manual, Mai 2022.
+   Values marked [CD] come from the manual. Values marked [Screen] are not in the manual
+   and only exist because screens need them; they use CD colours only. */
+
+@font-face{font-family:"DIN OT";src:url("fonts/DINOT-Light.otf") format("opentype");font-weight:300;font-style:normal}
+@font-face{font-family:"DIN OT";src:url("fonts/DINOT.otf") format("opentype");font-weight:400;font-style:normal}
+@font-face{font-family:"DIN OT";src:url("fonts/DINOT-Bold.otf") format("opentype");font-weight:700;font-style:normal}
+
+:root{
+  /* [CD 1.4.2] Primärfarbe «Technische Fachschule Bern-Blau» */
+  --tf-blue:#0082B4;
+  /* [CD 1.4.3] Only these four levels. 65% is the most used. */
+  --tf-blue-80:#3399C3;
+  --tf-blue-65:#55AACF;
+  --tf-blue-50:#80C1DA;
+  /* [CD 1.4.1] Schwarz for typography, Weiss */
+  --tf-black:#000000;
+  --tf-white:#FFFFFF;
+  /* [CD 1.4.4] Sekundärfarben (no usage rules given in the manual) */
+  --tf-orange:#F28855;
+  --tf-green:#4EB68E;
+  --tf-red:#EE716D;
+  --tf-sky:#60C5E2;
+  --tf-warm-gray:#A5ACAE;
+  --tf-light-green:#A2CE8D;
+
+  --color-primary:var(--tf-blue);
+  --color-primary-hover:var(--tf-blue-80); /* [Screen] */
+  --color-text:var(--tf-black);
+  --color-text-on-blue:var(--tf-white);
+  --color-bg:var(--tf-white);
+  --color-line:var(--tf-blue);
+  --color-link:var(--tf-blue);
+  --color-focus:var(--tf-blue); /* [Screen] */
+
+  /* [CD 1.3] DIN OT Bold: titles. DIN OT Light: body, quotes, emphasis. Arial: Office only. */
+  --font-sans:"DIN OT",Arial,sans-serif;
+  --font-office:Arial,sans-serif;
+  --font-weight-light:300;
+  --font-weight-bold:700;
+
+  /* [CD 1.3.3] print body 10pt/13pt (little text), 8.5pt/11.5pt (much text) */
+  --text-print-body:10pt;
+  --leading-print-body:13pt;
+  --text-print-dense:8.5pt;
+  --leading-print-dense:11.5pt;
+  /* [CD 1.5.2] internal print margin */
+  --print-margin:10mm;
+  /* [CD 1.1.4] logo min width; 49mm in Word templates */
+  --logo-min-width:51mm; /* @kind other */
+  --logo-min-width-office:49mm; /* @kind other */
+
+  /* [Screen] type scale, spacing */
+  --text-sm:0.875rem;--text-base:1rem;--text-lg:1.125rem;--text-xl:1.25rem;--text-2xl:1.5rem;--text-3xl:2rem;--text-4xl:2.5rem;--text-5xl:3.5rem;
+  --leading-tight:1.1;--leading-snug:1.25;--leading-normal:1.3; /* 13/10 */
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--space-7:48px;--space-8:64px;--space-9:96px;
+
+  /* [CD 1.5] Rectilinear forms only. No circles, no rounded corners. */
+  --radius:0px;
+  /* [CD 1.5.1] Spickel = 25% of the shorter side, bottom-right */
+  --spickel-ratio:0.25; /* @kind other */
+}
+
+.tf-h1{font-family:var(--font-sans);font-weight:700;font-size:var(--text-5xl);line-height:var(--leading-tight);color:var(--color-text)}
+.tf-h2{font-family:var(--font-sans);font-weight:700;font-size:var(--text-4xl);line-height:var(--leading-tight);color:var(--color-text)}
+.tf-h3{font-family:var(--font-sans);font-weight:700;font-size:var(--text-3xl);line-height:var(--leading-snug);color:var(--color-text)}
+.tf-h4{font-family:var(--font-sans);font-weight:700;font-size:var(--text-2xl);line-height:var(--leading-snug);color:var(--color-text)}
+.tf-body{font-family:var(--font-sans);font-weight:300;font-size:var(--text-base);line-height:var(--leading-normal);color:var(--color-text)}
+.tf-lead{font-family:var(--font-sans);font-weight:300;font-size:var(--text-xl);line-height:var(--leading-normal);color:var(--color-text)}
+.tf-label{font-family:var(--font-sans);font-weight:700;font-size:var(--text-sm);line-height:var(--leading-tight);color:var(--tf-blue)}
+.tf-link{color:var(--color-link);text-decoration:underline}
+.tf-link:hover{color:var(--color-primary-hover)}
+
+/* Spickel utility. Set --spickel to 25% of the element's shorter side
+   (e.g. 400×200 image → 50px). Use one size for images and one for text boxes. */
+.tf-spickel{clip-path:polygon(0 0,100% 0,100% calc(100% - var(--spickel,24px)),calc(100% - var(--spickel,24px)) 100%,0 100%)}
+
+/* [Screen] keyboard focus */
+:where(a,button,input,select,textarea):focus-visible{outline:2px solid var(--color-focus);outline-offset:2px}

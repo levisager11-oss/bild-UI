@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<!-- @dsCard group="UI Kit — Website" name="Website UI Kit" subtitle="CD-only colours, Spickel, content from the CD manual" viewport="1280x800" -->
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Technische Fachschule Bern — Website UI Kit</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{font-family:var(--font-sans);background:#fff;color:#000}a{color:#0082B4}a:hover{color:#3399C3}ul{padding-left:18px}</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+</head><body><div id="root"></div>
+<script type="text/babel">
+const {Button,Badge,InfoBox,SpickelImage,SectionHeader,CourseCard,TextField}=window.TFBernDesignSystem_019dd9;
+const wrap={width:'100%',maxWidth:1200,margin:'0 auto',padding:'0 32px'};
+const BERUFE=[
+ {t:'Elektroniker/in EFZ mit BMS',d:'Elektronische Hard- und Software entwickeln und realisieren.',m:['Standort Lorraine']},
+ {t:'ICT-Fachfrau/mann EFZ',m:['Standort Lorraine']},
+ {t:'Informatiker/in EFZ FR Betriebsinformatik mit BMS',m:['Standort Lorraine']},
+ {t:'Konstrukteur/in EFZ mit BMS',m:['Standort Lorraine']},
+ {t:'Polymechaniker/in EFZ mit BMS',m:['Standort Lorraine']},
+ {t:'Mechanikpraktiker/in EBA',m:['Standort Lorraine']},
+ {t:'Metallbauer/in EFZ',m:['Standort Felsenau']},
+ {t:'Schreiner/in EFZ',m:['Standort Felsenau']},
+ {t:'Spengler/in EFZ',m:['Standort Felsenau']},
+];
+function Header({page,go}){
+  const nav=[['lehre','Lehre'],['karriere','Karriere'],['produkte','Produkte']];
+  return <header style={{borderBottom:'2px solid #0082B4'}}><div style={{...wrap,height:96,display:'flex',alignItems:'center',gap:48}}>
+    <img src="../../assets/TFBern_Logo_RGB_PNG.png" alt="Technische Fachschule Bern" style={{height:56,cursor:'pointer'}} onClick={()=>go('home')}/>
+    <nav style={{display:'flex',gap:28,flex:1}}>{nav.map(([id,l])=><a key={id} href="#" onClick={e=>{e.preventDefault();go(id==='lehre'?'lehre':'home')}} style={{fontWeight:700,fontSize:17,textDecoration:page===id?'underline':'none',textUnderlineOffset:6,color:page===id?'#0082B4':'#000'}}>{l}</a>)}</nav>
+    <Button size="sm" onClick={()=>go('kontakt')}>Kontakt</Button>
+  </div></header>;
+}
+function Footer(){
+  return <footer style={{background:'#000',color:'#fff',marginTop:96}}><div style={{...wrap,padding:'48px 32px',display:'grid',gridTemplateColumns:'1.4fr 1fr 1fr',gap:40}}>
+    <div style={{display:'flex',flexDirection:'column',gap:16}}><img src="../../assets/TFBern_Logo_RGB_PNG.png" alt="Technische Fachschule Bern" style={{height:52,alignSelf:'flex-start',filter:'brightness(0) invert(1)'}}/><div style={{fontWeight:300}}>Eine Institution des Kantons Bern</div></div>
+    <div style={{fontWeight:300,lineHeight:1.3}}><b style={{display:'block',marginBottom:6}}>Standort Lorraine</b>Lorrainestrasse 3<br/>3013 Bern</div>
+    <div style={{fontWeight:300,lineHeight:1.3}}><b style={{display:'block',marginBottom:6}}>Standort Felsenau</b>Felsenaustrasse 17<br/>Bern</div>
+  </div><div style={{...wrap,padding:'0 32px 32px',fontWeight:300}}>www.tfbern.ch</div></footer>;
+}
+function Home({go}){
+  return <main style={{display:'flex',flexDirection:'column',gap:72,paddingTop:48}}>
+    <div style={wrap}><SpickelImage height={420} placeholder="Bild über alle Spalten — Lernende in der Werkstatt"/></div>
+    <div style={{...wrap,display:'grid',gridTemplateColumns:'2fr 1fr',gap:48,alignItems:'start'}}>
+      <SectionHeader eyebrow="Ausbildung bei der Technischen Fachschule Bern" title="Wir bilden Perspektiven – einzigartig" lead="Grundbildung in technischen Berufen an den Standorten Lorraine und Felsenau."/>
+      <InfoBox title="Reinschauen?" action={<Button variant="inverse" size="sm" onClick={()=>go('kontakt')}>Schnupperlehre anfragen</Button>}>Melde dich für eine Schnupperlehre an.</InfoBox>
+    </div>
+    <div style={{...wrap,display:'flex',flexDirection:'column',gap:32}}>
+      <SectionHeader eyebrow="Lehre" title="Berufe"/>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:32}}>{BERUFE.slice(0,3).map(b=><CourseCard key={b.t} category="Lehre" title={b.t} description={b.d} meta={b.m} href="#" />)}</div>
+      <div><Button variant="secondary" onClick={()=>go('lehre')}>Alle Berufe</Button></div>
+    </div>
+  </main>;
+}
+function Lehre({go}){
+  return <main style={{...wrap,paddingTop:56,display:'flex',flexDirection:'column',gap:40}}>
+    <SectionHeader eyebrow="Lehre" title="Berufe an der Technischen Fachschule Bern"/>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:40}}>{BERUFE.map(b=><div key={b.t} onClick={e=>{e.preventDefault();go('detail')}}><CourseCard category="Lehre" title={b.t} description={b.d} meta={b.m}/></div>)}</div>
+  </main>;
+}
+function Detail({go}){
+  const L=({items})=><ul style={{fontWeight:300,fontSize:17,lineHeight:1.3,display:'flex',flexDirection:'column',gap:6}}>{items.map(i=><li key={i}>{i}</li>)}</ul>;
+  const H=({children})=><h3 style={{fontWeight:700,fontSize:24,lineHeight:1.2,marginBottom:12}}>{children}</h3>;
+  return <main style={{display:'flex',flexDirection:'column',gap:56,paddingTop:48}}>
+    <div style={wrap}><SpickelImage height={360} placeholder="Bild über alle Spalten — Elektronik"/></div>
+    <div style={{...wrap,display:'grid',gridTemplateColumns:'2fr 1fr',gap:56,alignItems:'start'}}>
+      <div style={{display:'flex',flexDirection:'column',gap:40}}>
+        <div style={{display:'flex',gap:8}}><Badge>EFZ</Badge><Badge tone="tint">mit BMS</Badge></div>
+        <SectionHeader title="Elektroniker/in EFZ mit BMS" lead="Elektroniker/innen entwickeln und realisieren elektronische Hard- und Software. Sie fertigen Elektronikprodukte an, planen deren Herstellung und führen Mess-, Prüf- und Wartungsarbeiten sowie Inbetriebsetzungen durch."/>
+        <section><H>Was brauchst du für die Lehre?</H><L items={['Sekundarschulabschluss oder vergleichbare Schulbildung','Gute Leistungen in Mathematik und den naturwissenschaftlichen Fächern','Interesse an Technik','Stärke im logisch-abstrakten Denken','Lern- und Leistungsbereitschaft','Geschickte Hände']}/></section>
+        <section><H>Karriere</H><L items={['Fachkurse','höhere Fachschulen','Fachhochschule','Nach Passerelle: ETH und Universität']}/></section>
+      </div>
+      <aside style={{display:'flex',flexDirection:'column',gap:24}}>
+        <InfoBox title="3-1-Modell">In den ersten drei Lehrjahren liegt der Schwerpunkt auf der praktischen und fachtheoretischen Ausbildung und einer gezielten Vorbereitung auf die Berufsmaturität im vierten Lehrjahr.</InfoBox>
+        <div style={{borderTop:'2px solid #0082B4',paddingTop:16,display:'flex',flexDirection:'column',gap:12}}><b style={{fontSize:20}}>Noch Fragen?</b><p style={{fontWeight:300,lineHeight:1.3}}>Das Abteilungssekretariat Elektronik hilft dir gerne weiter.</p><Button variant="secondary" size="sm" onClick={()=>go('kontakt')}>Kontakt</Button></div>
+      </aside>
+    </div>
+  </main>;
+}
+function Kontakt(){
+  const [sent,setSent]=React.useState(false);
+  return <main style={{...wrap,paddingTop:56,display:'grid',gridTemplateColumns:'1fr 1fr',gap:64,alignItems:'start'}}>
+    <SectionHeader eyebrow="Kontakt" title="Schnupperlehre anfragen" lead="Füll das Formular aus. Wir melden uns bei dir."/>
+    {sent?<InfoBox title="Anfrage gesendet">Vielen Dank. Wir melden uns bei dir.</InfoBox>:
+    <form onSubmit={e=>{e.preventDefault();setSent(true)}} style={{display:'flex',flexDirection:'column',gap:20}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}><TextField label="Vorname" required/><TextField label="Nachname" required/></div>
+      <TextField label="E-Mail" type="email" required placeholder="name@beispiel.ch"/>
+      <TextField label="Gewünschter Beruf" placeholder="z. B. Polymechaniker/in EFZ"/>
+      <div><Button type="submit">Anfrage senden</Button></div>
+    </form>}
+  </main>;
+}
+function App(){
+  const [page,setPage]=React.useState('home');
+  const go=p=>{setPage(p);window.scrollTo(0,0)};
+  return <div><Header page={page==='home'?'':page==='detail'?'lehre':page} go={go}/>
+    {page==='home'&&<Home go={go}/>}{page==='lehre'&&<Lehre go={go}/>}{page==='detail'&&<Detail go={go}/>}{page==='kontakt'&&<Kontakt/>}
+    <Footer/></div>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script></body></html>
