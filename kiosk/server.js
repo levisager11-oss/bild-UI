@@ -346,7 +346,7 @@ async function checkPrompt(prompt) {
 const blockedReply = (r) => ({
   blocked: true,
   category: r.category,
-  error: `Dieses Bild können wir hier leider nicht machen (${r.category}). Probier doch etwas anderes!`,
+  error: `Dieses Bild können wir hier leider nicht machen (${r.category}). Probier doch etwas anderes! Findest du, das ist ein Fehler? Dann sprich jemanden vom Stand an.`,
 });
 
 async function handleResearchPlan(req, res) {
