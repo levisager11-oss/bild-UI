@@ -62,6 +62,8 @@ Besucher sehen die Phase «Recherche» mit dem Suchbegriff im Fortschritt. Fakte
 
 Alternativ gehen Umgebungsvariablen: `ASK_URL`, `ASK_KEY`, `ASK_MODEL`. Änderungen an `data/ask.json` gelten sofort, ohne Neustart. Ob ask erreichbar ist, zeigt das Betreuer-Menü. Dort lässt sich die Recherche auch ganz abschalten, Besucher können sie in den Profi-Einstellungen ausschalten.
 
+**Zertifikat:** Seit dem Zertifikatswechsel im Aug. 2026 schickt `ask.ict-tfbern.ch` ein falsches Zwischenzertifikat mit. Browser merken das nicht, Node lehnt die Verbindung ab («unable to verify the first certificate»), ask gilt dann im Betreuer-Menü als nicht erreichbar. Deshalb liegt das richtige Zwischenzertifikat («Sectigo Public Server Authentication CA DV R36», gültig bis 2036) als `ask-ca.pem` bei, `start-kiosk.bat` gibt es Node über `NODE_EXTRA_CA_CERTS` mit. Wird der Server von Hand gestartet: `set NODE_EXTRA_CA_CERTS=ask-ca.pem` vorher setzen. Sobald die ICT die Kette auf dem Server korrigiert, ist die Datei nicht mehr nötig, schadet aber auch nicht.
+
 ## Referenzfotos von Wikipedia
 
 Nennt ein Wunsch ein bestimmtes echtes Ding (Zytglogge, Matterhorn, Bartgeier, Tesla Cybertruck …), zeigt der Kiosk dem Bildmodell ein Foto davon. Das Motiv sieht dadurch deutlich echter aus. Ablauf:

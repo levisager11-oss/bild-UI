@@ -10,6 +10,9 @@ set "NODE=node"
 if exist "%~dp0node\node.exe" set "NODE=%~dp0node\node.exe"
 
 rem --use-system-ca: Zertifikate von Windows verwenden (ask nutzt ein Zertifikat der Schule)
+rem ask-ca.pem: Zwischenzertifikat von ask. Der ask-Server schickt seit Aug. 2026 ein falsches mit,
+rem Node lehnt die Verbindung sonst ab, solange Windows es nicht selbst gespeichert hat.
+if exist "%~dp0ask-ca.pem" set "NODE_EXTRA_CA_CERTS=%~dp0ask-ca.pem"
 rem Endlosschleife: Falls der Server einmal abbricht, startet er nach 3 Sekunden neu.
 start "Kiosk-Server" /min cmd /c "for /l %%i in (0,0,1) do ("%NODE%" --use-system-ca server.js & timeout /t 3 /nobreak >nul)"
 timeout /t 2 /nobreak >nul

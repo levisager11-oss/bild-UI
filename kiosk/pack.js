@@ -11,7 +11,7 @@ const DIST = path.join(SRC, 'dist');
 const OUT = path.join(DIST, 'Kiosk');
 const ZIP = path.join(DIST, 'Kiosk.zip');
 
-const FILES = ['server.js', 'guardrails.js', 'workflow.json', 'system_prompt.txt', 'system_prompt_edit.txt', 'start-kiosk.bat', 'ask.example.json', 'README.md'];
+const FILES = ['server.js', 'guardrails.js', 'workflow.json', 'system_prompt.txt', 'system_prompt_edit.txt', 'start-kiosk.bat', 'ask.example.json', 'ask-ca.pem', 'README.md'];
 const DIRS = ['public', 'reference'];
 // Betreuer-Einstellungen und ask-Zugang mitnehmen, den Bildzähler nicht.
 const DATA_FILES = ['ask.json', 'settings.json'];
