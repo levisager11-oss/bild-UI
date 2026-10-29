@@ -24,7 +24,7 @@
   // ---------- Elements ----------
   const $ = (id) => document.getElementById(id);
   const el = {
-    counter: $('counter'), logo: document.querySelector('.logo'),
+    counter: $('counter'),
     prompt: $('prompt'), field: $('field'), clear: $('clear'), error: $('error'),
     ideas: $('ideas'), shuffle: $('shuffle'), dice: $('dice'), styles: $('styles'),
     formats: $('formats'), counts: $('counts'), openPro: $('openPro'), generate: $('generate'),
@@ -165,7 +165,7 @@
 
   // ---------- Input ----------
   function onPromptInput() {
-    el.clear.hidden = !el.prompt.value;
+    el.clear.hidden = !el.prompt.value || state === 'generating';
     showError('');
   }
 
@@ -208,7 +208,9 @@
     el.actions.hidden = next !== 'result';
     const busy = next === 'generating';
     el.generate.disabled = busy || !status.comfy;
+    el.generate.textContent = busy ? 'Bild wird erstellt …' : 'Bild erstellen';
     el.prompt.readOnly = busy;
+    el.clear.hidden = busy || !el.prompt.value;
     document.querySelectorAll('#formats button, .style, #dice, #shuffle, .idea, #openPro').forEach((b) => (b.disabled = busy));
     applySettings();
     if (next !== 'result') closeOverlays();
@@ -1315,7 +1317,11 @@
   el.showCaption.addEventListener('click', () => toggleOverlay('caption'));
   el.showTech.addEventListener('click', () => toggleOverlay('tech'));
   el.restart.addEventListener('click', resetAll);
-  window.addEventListener('resize', fitFrame);
+  window.addEventListener('resize', () => {
+    fitFrame();
+    // Screen height changed enough for a different number of ideas (e.g. browser went full screen).
+    if (state !== 'generating' && el.ideas.children.length !== ideaCount()) renderIdeas();
+  });
 
   // ---------- Start ----------
   renderStyles();
