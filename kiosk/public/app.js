@@ -44,7 +44,7 @@
     proReference: $('proReference'), proReferenceRow: $('proReferenceRow'),
     zoom: $('zoom'), zoomStage: $('zoomStage'), zoomImg: $('zoomImg'), zoomBtn: $('zoomBtn'),
     zoomIn: $('zoomIn'), zoomOut: $('zoomOut'), zoomFit: $('zoomFit'), zoomClose: $('zoomClose'),
-    aResearch: $('aResearch'), aReference: $('aReference'), aQuality: $('aQuality'),
+    aResearch: $('aResearch'), aGuardrails: $('aGuardrails'), aReference: $('aReference'), aQuality: $('aQuality'),
     admin: $('admin'), adminStatus: $('adminStatus'), adminMsg: $('adminMsg'), adminSave: $('adminSave'),
     adminSaver: $('adminSaver'), adminReload: $('adminReload'),
     aSteps: $('aSteps'), aIdle: $('aIdle'), aSaver: $('aSaver'), aMaxVariants: $('aMaxVariants'),
@@ -55,7 +55,7 @@
   const clientId = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
 
   // ---------- State ----------
-  let settings = { steps: 16, upsampler: true, maxVariants: 4, idleSeconds: 60, screensaverSeconds: 30, showRecent: true, allowAdvanced: true, research: true };
+  let settings = { steps: 16, upsampler: true, maxVariants: 4, idleSeconds: 60, screensaverSeconds: 30, showRecent: true, allowAdvanced: true, research: true, guardrails: 'mittel' };
   let status = { comfy: true, gpu: null, queue: null, ask: { configured: false }, imagesToday: 0, recentCount: 0 };
   let state = 'idle';           // idle | generating | result
   let format = 'square';
@@ -109,7 +109,7 @@
   async function postJson(url, body, signal) {
     const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}), signal });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.error || 'Unbekannter Fehler');
+    if (!r.ok) throw Object.assign(new Error(data.error || 'Unbekannter Fehler'), { blocked: data.blocked === true });
     return data;
   }
 
@@ -390,7 +390,7 @@
       job.info = data.info;
       if (!job.started) setProgress('In der Warteschlange', 'gleich geht es los', null, null);
     } catch (e) {
-      if (stillCurrent()) failJob(e.message);
+      if (stillCurrent()) e.blocked ? blockJob(e.message) : failJob(e.message);
     }
   }
 
@@ -407,6 +407,7 @@
       plan = await postJson('/api/research/plan', { prompt: current.prompt }, signal);
     } catch {}
     if (current !== job || current.done) return;
+    if (plan && plan.blocked) return blockJob(plan.error);
     current.plan = plan;
     // Up to two named things (e.g. "die Roche-Türme vor dem Eiger"): one search and one photo each.
     const things = (plan && Array.isArray(plan.things)) ? plan.things : [];
@@ -467,6 +468,15 @@
     job = null;
     setState('idle');
     showError(`Das hat leider nicht geklappt: ${msg} Versuch es nochmal oder frag beim Stand nach.`);
+  }
+
+  // Guardrails stopped the wish: back to the start, the wish stays in the field, a friendly hint.
+  function blockJob(msg) {
+    if (!job || job.done) return;
+    endJob();
+    job = null;
+    setState('idle');
+    showError(msg);
   }
 
   function cancelJob() {
@@ -1041,6 +1051,10 @@
       ['ask (Recherche)', !status.ask || !status.ask.configured
         ? 'nicht eingerichtet (data/ask.json fehlt)'
         : `${status.ask.model}, ${status.ask.ok ? 'erreichbar' : 'NICHT erreichbar'}`, !!(status.ask && status.ask.configured && !status.ask.ok)],
+      ['Guardrails', !settings.guardrails || settings.guardrails === 'aus'
+        ? 'AUS' : `${settings.guardrails}${status.ask && status.ask.configured ? ', Wortliste + ask' : ', nur Wortliste'}`, settings.guardrails === 'aus'],
+      ['Gesperrte Wünsche', String(status.blockedCount || 0)],
+      ...(status.blocked || []).slice(0, 5).map((b) => [`  ${b.at} (${b.by})`, `${b.category}: «${b.prompt}»`]),
       ['Verbindung Seite', ws && ws.readyState === WebSocket.OPEN ? 'Live-Verbindung steht' : 'Live-Verbindung unterbrochen', !(ws && ws.readyState === WebSocket.OPEN)],
     ];
     el.adminStatus.replaceChildren(...rows.flatMap(([k, v, bad]) => {
@@ -1064,6 +1078,7 @@
     setChecked(el.aResearch, settings.research);
     setChecked(el.aReference, settings.reference);
     setChecked(el.aQuality, settings.quality || 'maximal');
+    setChecked(el.aGuardrails, settings.guardrails || 'mittel');
     el.adminMsg.textContent = '';
     stopScreensaver();
     renderAdminStatus();
@@ -1084,6 +1099,7 @@
         research: getChecked(el.aResearch) === 'true',
         reference: getChecked(el.aReference) === 'true',
         quality: getChecked(el.aQuality) || 'maximal',
+        guardrails: getChecked(el.aGuardrails) || 'mittel',
       });
       const wasDefault = !advancedChanged();
       settings = data.settings;

@@ -8,6 +8,7 @@ const net = require('net');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const guardrails = require('./guardrails');
 
 const COMFY_URL = new URL(process.env.COMFY_URL || 'http://192.168.60.37:8188');
 const PORT = Number(process.env.PORT || 8080);
@@ -52,6 +53,7 @@ const DEFAULT_SETTINGS = {
   research: true,        // let ask look things up on the web when a prompt needs it
   reference: true,       // give the image model a free Wikipedia photo of the named thing
   quality: 'maximal',    // schnell | hoch | maximal, see QUALITY_LEVELS
+  guardrails: 'mittel',  // aus | locker | mittel | streng, see guardrails.js
 };
 
 // Samplers visitors can pick in the advanced settings.
@@ -115,6 +117,7 @@ function cleanSettings(input) {
   if (input.research != null) s.research = !!input.research;
   if (input.reference != null) s.reference = !!input.reference;
   if (['schnell', 'hoch', 'maximal'].includes(input.quality)) s.quality = input.quality;
+  if (guardrails.LEVELS.includes(input.guardrails)) s.guardrails = input.guardrails;
   return s;
 }
 
@@ -304,6 +307,48 @@ function remember(key, value) {
   askCache.set(key, { at: Date.now(), value });
 }
 
+// ---------- Guardrails ----------
+// Blocked wishes of this server run, newest first, for the staff menu. Only in memory.
+let blocked = [];
+let blockedCount = 0;
+
+// Word list first, then ask (if set up). ask failing or slow lets the wish through: the word list still ran.
+async function checkPrompt(prompt) {
+  const level = settings.guardrails;
+  if (!level || level === 'aus') return { ok: true };
+  let result = guardrails.checkWords(prompt, level);
+  if (result.ok && askConfig().configured) {
+    const key = `guard:${level}:${prompt.toLowerCase()}`;
+    let verdict = cached(key);
+    if (!verdict) {
+      try {
+        const { text } = await askChat(guardrails.moderationPrompt(level), prompt, { ...askConfig().planExtra, temperature: 0 }, 6000);
+        const answer = parseJsonAnswer(text);
+        if (answer && typeof answer.ok === 'boolean') {
+          verdict = { ok: answer.ok, category: guardrails.CATEGORIES.includes(answer.category) ? answer.category : 'Anderes' };
+          remember(key, verdict);
+        }
+      } catch (e) {
+        console.error('guardrail check failed:', errText(e));
+      }
+    }
+    if (verdict && !verdict.ok) result = { ok: false, category: verdict.category, by: 'ask' };
+  }
+  if (!result.ok) {
+    blockedCount++;
+    blocked.unshift({ at: new Date().toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }), prompt: prompt.slice(0, 120), category: result.category, by: result.by, match: result.match });
+    blocked = blocked.slice(0, 10);
+    console.log(`Gesperrt (${result.by}, ${result.category}${result.match ? ', «' + result.match + '»' : ''}): ${prompt.slice(0, 200)}`);
+  }
+  return result;
+}
+
+const blockedReply = (r) => ({
+  blocked: true,
+  category: r.category,
+  error: `Dieses Bild können wir hier leider nicht machen (${r.category}). Probier doch etwas anderes!`,
+});
+
 async function handleResearchPlan(req, res) {
   let body;
   try {
@@ -312,16 +357,25 @@ async function handleResearchPlan(req, res) {
     return sendJson(res, 400, { error: 'Ungültige Anfrage' });
   }
   const prompt = String(body.prompt || '').trim().slice(0, 1000);
-  if ((!settings.research && !settings.reference) || !askConfig().configured || !prompt) return sendJson(res, 200, { needed: false, off: true });
+  // The guardrail check runs alongside the plan, so /api/generate later finds its answer in the cache.
+  const guard = prompt ? checkPrompt(prompt) : Promise.resolve({ ok: true });
+  if ((!settings.research && !settings.reference) || !askConfig().configured || !prompt) {
+    const g = await guard;
+    return sendJson(res, 200, g.ok ? { needed: false, off: true } : blockedReply(g));
+  }
   try {
     const key = 'plan:' + prompt.toLowerCase();
     let plan = cached(key);
-    if (!plan) {
-      const { text } = await askChat(PLAN_PROMPT, prompt, askConfig().planExtra, 8000);
-      plan = parseJsonAnswer(text);
-      if (!plan) throw new Error('ask lieferte kein JSON');
-      remember(key, plan);
-    }
+    const planning = plan ? Promise.resolve(plan) : askChat(PLAN_PROMPT, prompt, askConfig().planExtra, 8000).then(({ text }) => {
+      const p = parseJsonAnswer(text);
+      if (!p) throw new Error('ask lieferte kein JSON');
+      remember(key, p);
+      return p;
+    });
+    planning.catch(() => {}); // handled below, after the guardrail answer
+    const g = await guard;
+    if (!g.ok) return sendJson(res, 200, blockedReply(g));
+    plan = await planning;
     // Up to two named things, each with its own search and Wikipedia photo. Older answers had one thing at the top level.
     const raw = Array.isArray(plan.things) ? plan.things : [plan];
     const seen = new Set();
@@ -669,6 +723,13 @@ const QUALITY = {
 };
 const LAB = process.env.KIOSK_LAB === '1';
 
+// Guardrails: extra rule for the prompt upsampler, so it does not add what the level forbids on its own.
+const GUARD_SYSTEM = {
+  locker: 'Additional rule: never add nudity, sexual content or gore of your own.',
+  mittel: 'Additional rule: keep the picture suitable for a family audience with children: no nudity, sexual content, blood, gore or realistic violence against people, even if the request hints at it.',
+  streng: 'Additional rule: keep the picture friendly and cheerful for young children: no nudity, no weapons, no fighting, no blood, nothing scary or threatening, even if the request hints at it.',
+};
+
 // Output size in megapixels per quality level and number of images. Native 2 MP gave the most natural
 // faces and finest detail (tested); 4 images at 2 MP would take about a minute, so fewer pixels there.
 const QUALITY_LEVELS = {
@@ -784,7 +845,7 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
     baseRequest = request;
     Object.assign(wf['11'].inputs, {
       prompt: request + hint(0),
-      system_prompt: q.systemExtra ? `${system}\n${q.systemExtra}` : system,
+      system_prompt: [system, q.systemExtra, GUARD_SYSTEM[settings.guardrails]].filter(Boolean).join('\n'),
       max_length: t.max_length,
       thinking: !!t.thinking,
       mtp: t.mtp || 'off',
@@ -934,6 +995,8 @@ async function handleGenerate(req, res) {
   }
   const prompt = String(body.prompt || '').trim().slice(0, 1000);
   if (!prompt) return sendJson(res, 400, { error: 'Bitte gib eine Beschreibung ein.' });
+  const guard = await checkPrompt(prompt);
+  if (!guard.ok) return sendJson(res, 422, blockedReply(guard));
   const variants = Math.min(settings.maxVariants, [1, 2, 4].includes(Number(body.variants)) ? Number(body.variants) : 1);
 
   const facts = typeof body.facts === 'string' ? body.facts.trim().slice(0, MAX_FACTS) : '';
@@ -1027,7 +1090,7 @@ async function handleStatus(res) {
     queue = { running: q.queue_running.length, pending: q.queue_pending.length };
   } catch {}
   const ask = await getAskStatus();
-  sendJson(res, 200, { comfy: comfyOk, comfyUrl: COMFY_URL.origin, gpu, queue, ask, imagesToday: imagesToday(), recentCount: recent.length, settings });
+  sendJson(res, 200, { comfy: comfyOk, comfyUrl: COMFY_URL.origin, gpu, queue, ask, imagesToday: imagesToday(), recentCount: recent.length, blocked, blockedCount, settings });
 }
 
 async function handleSettings(req, res) {

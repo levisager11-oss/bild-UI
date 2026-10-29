@@ -98,6 +98,22 @@ Nennt ein Wunsch «TF Bern», «TFBern» oder «Technische Fachschule», bekommt
 
 Wünsche ohne TF Bern bleiben unverändert (getestet: identischer Auftrag).
 
+## Guardrails (Filter für Wünsche)
+
+Jeder Wunsch wird vor Recherche und Bild geprüft (`guardrails.js`). Stufe im Betreuer-Menü: **Aus / Locker / Mittel / Streng**, Standard «Mittel».
+
+1. **Wortliste** (sofort, ohne Netz, erkennt auch Tricks wie «n4ckt» oder «s e x»). Harmlose Wörter wie Nacktschnecke, Killerwal, Taschenmesser, Blutorange, Wettkampf sind ausgenommen.
+2. **ask** prüft den Sinn (Umschreibungen, Mundart, echte Personen bloßgestellt), ca. 1–2 s, läuft parallel zum Recherche-Schritt. Antwort 1 Stunde im Cache. Fällt ask aus, bleibt die Wortliste.
+3. Der Prompt-Verbesserer bekommt eine Zusatzregel, damit er nichts Verbotenes von sich aus ergänzt.
+
+| Stufe | gesperrt | erlaubt |
+| --- | --- | --- |
+| Locker | Sexuelles, Gore, Suizid, Nazi-/Hass-Symbole, Rassismus | Action- und Comic-Gewalt, Monster, derbe Wörter |
+| Mittel | dazu realistische Gewalt, Leichen, Drogen, Beleidigungen, Bloßstellen echter Personen (Lehrer, Mitschüler, Promis) | Ritter mit Schwert, Piraten, Drachen, Geisterhaus, Promis in normalen Szenen |
+| Streng | dazu alle Waffen und Kämpfe, Gruseliges, echte Personen überhaupt, Politik | friedliche, fröhliche Bilder |
+
+Der Besucher sieht «Dieses Bild können wir hier leider nicht machen (Kategorie). Probier doch etwas anderes!». Das Betreuer-Menü zeigt die Anzahl und die letzten gesperrten Wünsche (nur im Speicher), das Server-Fenster protokolliert sie.
+
 ## Bildqualität (Testnacht 28./29. Oktober 2026)
 
 Rund 550 Testbilder, Einzelheiten in `tests/NOTIZEN.md`. Die Werte stehen im `QUALITY`-Block in `server.js`.
@@ -132,6 +148,7 @@ Im Labor-Modus darf eine Anfrage mit `lab` alle Werte aus `QUALITY` überschreib
 
 - Standard-Schritte, max. Anzahl Bilder, Auto-Reset- und Bildschirmschoner-Zeit
 - Prompt-Verbesserer, Besucherbilder im Schoner und Profi-Einstellungen an/aus
+- Guardrails: Aus / Locker / Mittel / Streng
 - Warteschlange leeren, Besucherbilder aus dem Schoner entfernen, Bildzähler zurücksetzen, Schoner testen
 
 Einstellungen und Zähler liegen in `data/` (nicht im Git).
