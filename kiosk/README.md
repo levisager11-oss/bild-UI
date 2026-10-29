@@ -112,7 +112,7 @@ Jeder Wunsch wird vor Recherche und Bild geprüft (`guardrails.js`). Stufe im Be
 | Mittel | dazu realistische Gewalt, Leichen, Drogen, Beleidigungen, Bloßstellen echter Personen (Lehrer, Mitschüler, Promis) | Ritter mit Schwert, Piraten, Drachen, Geisterhaus, Promis in normalen Szenen |
 | Streng | dazu alle Waffen und Kämpfe, Gruseliges, echte Personen überhaupt, Politik | friedliche, fröhliche Bilder |
 
-Der Besucher sieht «Dieses Bild können wir hier leider nicht machen (Kategorie). Probier doch etwas anderes! Findest du, das ist ein Fehler? Dann sprich jemanden vom Stand an.». Das Betreuer-Menü zeigt die Anzahl und die letzten gesperrten Wünsche (nur im Speicher), das Server-Fenster protokolliert sie.
+Der Besucher sieht «Dieses Bild können wir hier leider nicht machen (Kategorie). Probier doch etwas anderes! Findest du, das ist ein Fehler? Dann sprich jemanden von der TF Bern an.». Das Betreuer-Menü zeigt die Anzahl und die letzten gesperrten Wünsche (nur im Speicher), das Server-Fenster protokolliert sie.
 
 ## Bildqualität (Testnacht 28./29. Oktober 2026)
 

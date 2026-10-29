@@ -345,7 +345,7 @@
       return;
     }
     if (!status.comfy) {
-      showError('Der Bildgenerator ist gerade nicht erreichbar. Bitte melde dich beim Stand.');
+      showError('Der Bildgenerator ist gerade nicht erreichbar. Bitte sag jemandem von der TF Bern Bescheid.');
       return;
     }
     showError('');
@@ -467,7 +467,7 @@
     endJob();
     job = null;
     setState('idle');
-    showError(`Das hat leider nicht geklappt: ${msg} Versuch es nochmal oder frag beim Stand nach.`);
+    showError(`Das hat leider nicht geklappt: ${msg} Versuch es nochmal oder frag jemanden von der TF Bern.`);
   }
 
   // Guardrails stopped the wish: back to the start, the wish stays in the field, a friendly hint.
