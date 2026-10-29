@@ -91,3 +91,8 @@ Rahmen:
 - Übernommen in server.js/app.js: er_sde, Qualitätsstufen (maximal = 2 MP bei 1 Bild), neue STYLES, Regel gegen Fantasie-Schrift, echte Varianten («Nochmal» + eigene Beschreibung pro Bild), besserer ask-Prüf-Schritt, ask-Zwischenspeicher.
 - Läuft noch im Hintergrund (Ergebnisse im Scratchpad, nicht ausgewertet): 07 echte Motive mit/ohne Recherche+Foto, 05 alle Prompt-Ideen, 08 Formate/4 Varianten.
 - Offen: 07/05/08 auswerten, schwache Prompt-Ideen ersetzen, Beispielbilder für den Bildschirmschoner neu erstellen, Zeitangabe auf der Startseite anpassen («in wenigen Sekunden» → ca. 25 s), README ergänzen, Bericht-Seite.
+
+### 17 Standort Lorraine (29.10., 06:50)
+- Foto `reference/standort-lorraine.jpg` (550×363) vom Nutzer abgelegt; Beschreibung in `standorte.json` genauer (Sandsteinbau, rotes Walmdach, Lukarnen, Berner Fahnen, graue Halle mit spitzen Dächern davor).
+- Ohne Foto: erfundene Gebäude, beim Lego-Modell sogar ein Fussballstadion. Mit Foto: richtiges Gebäude in Winter, Nacht und Lego (6/6). Bildausschnitt bleibt nah am Foto.
+- Kontrolle «Das Lorraine-Quartier in Bern im Herbst» (ohne TF Bern): kein Standort-Foto, Bild identisch (aus dem Zwischenspeicher).

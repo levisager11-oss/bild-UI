@@ -1,0 +1,14 @@
+{
+  "name": "17 Standort Lorraine: ohne vs. mit Standort-Foto",
+  "seeds": [17101, 17202],
+  "prompts": [
+    { "key": "lorraine-winter", "prompt": "Der Standort Lorraine der TF Bern im Winter", "format": "landscape", "research": true, "reference": true },
+    { "key": "lorraine-nacht", "prompt": "Die TF Bern an der Lorrainestrasse bei Nacht", "format": "landscape", "research": true, "reference": true },
+    { "key": "lorraine-lego", "prompt": "Die TF Bern Lorraine als Lego-Modell", "research": true, "reference": true },
+    { "key": "kontrolle-lorraine", "prompt": "Das Lorraine-Quartier in Bern im Herbst", "format": "landscape", "research": true, "reference": true }
+  ],
+  "variants": [
+    { "key": "ohne", "lab": { "noLogo": true } },
+    { "key": "mit", "lab": {} }
+  ]
+}

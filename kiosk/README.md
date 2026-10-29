@@ -80,7 +80,8 @@ Nennt ein Wunsch «TF Bern», «TFBern» oder «Technische Fachschule», bekommt
 - **Logo** (`reference/tfbern-logo.png`): Die KI übernimmt das echte Logo auf T-Shirt, Becher, Fahne usw. Ohne Vorlage erfand sie rote Fantasie-Logos.
 - **Standorte** (`reference/standorte.json`): Nennt der Wunsch zusätzlich «Felsenau» oder «Lorraine», kommt ein Foto des Gebäudes mit. Das Logo kommt dann nur dazu, wenn ein Gegenstand wie Fahne, T-Shirt oder Bus vorkommt.
   - Felsenau: Foto von Urs Schönholzer, CC BY 4.0, Wikimedia Commons.
-  - **Lorraine: Foto fehlt noch.** Ein eigenes Foto des Gebäudes an der Lorrainestrasse 3 als `reference/standort-lorraine.jpg` ablegen, Server neu starten, fertig. Weitere Standorte gehen gleich über `standorte.json`.
+  - Lorraine: Foto der Technischen Fachschule Bern (Lorrainestrasse 3, mit der Halle davor).
+  - Weitere Standorte: Foto in `reference/` ablegen, Eintrag in `standorte.json` ergänzen, Server neu starten.
 
 Wünsche ohne TF Bern bleiben unverändert (getestet: identischer Auftrag).
 
