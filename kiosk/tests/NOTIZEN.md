@@ -103,3 +103,18 @@ Rahmen:
 - 19 (alle 7 Blickwinkel einzeln): «nah vor dem Eingang», «Detail» und «vom Nachbardach» sahen trotzdem aus wie das Foto → ersetzt. Rot aus den Logo-Farben gestrichen (Logo wurde umgefärbt).
 - 20 (6 Blickwinkel × Lorraine/Felsenau): 12/12 verschieden, Gebäude erkennbar.
 - Netzunterbruch während Test 18 hat den Server abstürzen lassen (Fehlerantwort nach schon gesendetem Bildkopf). Behoben in `proxyHttp`, dazu Sicherheitsnetz für unerwartete Fehler und Neustart-Schleife in `start-kiosk.bat`.
+
+### 21 Zwei benannte Dinge (29.10.)
+- Problem: «Die Roche-Türme vor dem Eiger» – der Prüf-Schritt durfte nur ein Ding nennen; Eiger ohne Suche und ohne Foto (Bild: beliebiger Berg).
+- Neu: Prüf-Schritt liefert `things` (höchstens 2), je eigene Websuche und eigenes Wikipedia-Foto, Auftrag «beide in einer zusammenhängenden Szene». `plan-check.js`: 48/50 (die 2 Fehler sind falsche Artikelnamen von ask, z. B. «SBB Re 4/6 II»).
+- 9 Wünsche × 2 Seeds, alt (nur erstes Ding) vs. neu: klar besser bei Eiger-Nordwand und Kapellbrücke (vorher erfunden), gleich gut bei bekannten Dingen (Matterhorn, Eiffelturm), Comic-Stil und Lego bleiben. Einzel-Wunsch-Kontrolle: identischer Auftrag (ComfyUI-Cache, 0 s).
+- Nebenbefund Fotosuche: erfundene Titel («Roche-Türme»), Begriffsklärungen («Pilatus») und falsche Bedeutungen («Jungfrau» = Jungfräulichkeit, «Merkur» = Automarke) → Wikidata-Abgleich mit dem englischen Namen, Wikipedia-Suche als Rückfall, keine Personen (Suche hatte «Rob Pilatus» geliefert). Kette Prüfen → Foto mit 40 Wünschen: alle Fotos passend; wo ask sich irrt, kein Foto statt eines falschen.
+
+### 22–23 Referenz als Anhaltspunkt (29.10.)
+- Wunsch: Fotos sollen das Bild nicht zu stark bestimmen. Mit Foto in allen Schritten: Blickwinkel/Pose/Farbe kopiert, zwei Seeds fast dasselbe Bild.
+- 22 (4 Wünsche, 7 Varianten): nur erste 50 % ≈ wie vorher; ab 10 % freierer Aufbau, Motiv exakt; ab 25 % Details schlechter; lockere Formulierung allein ändert Licht/Stimmung, Blickwinkel nur teils.
+- 23 (8 Wunsch-Arten × 2 Seeds: jetzt / ab10 / ab15 / locker+ab10): locker+ab10 am freiesten bei erkennbaren Motiven (blaue statt weisse Vespa, Matterhorn und Eiger aus anderem Winkel, Steinbock in eigener Szene), Comic und Verwandlung gut. ab10 ≈ ab15. → Standard `refRange [0.1, 1]` + `refLoose`, nicht bei Logo/Standort.
+- Achtung Test-Werkzeug: Roche lief in 22/23 zuerst nur mit Eiger-Foto (bench.js nahm alten Fotonamen aus seinem Zwischenspeicher, den der neu gestartete Server nicht mehr kannte). Behoben, Roche-Reihe neu gerechnet.
+
+### 24 Endkontrolle (29.10.)
+- Standardwerte, 7 Wünsche inkl. 4 Varianten, Logo-Shirt und Lorraine-Lego: alles läuft; 4 Varianten deutlich verschieden; Logo/Standort ohne die neue Einstellung, unverändert.

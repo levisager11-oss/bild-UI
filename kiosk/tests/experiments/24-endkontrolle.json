@@ -1,0 +1,16 @@
+{
+  "name": "24 Endkontrolle mit den Standardwerten (zwei Dinge, Referenz als Anhaltspunkt), Logo und Standort als Gegenprobe",
+  "seeds": [24101],
+  "prompts": [
+    { "key": "roche-eiger", "prompt": "Die Roche-Türme vor dem Eiger in den Schweizer Alpen", "format": "landscape", "research": true, "reference": true },
+    { "key": "roche-eiger-4", "prompt": "Die Roche-Türme vor dem Eiger in den Schweizer Alpen", "variants": 4, "research": true, "reference": true },
+    { "key": "lego-kapellbruecke-pilatus", "prompt": "Die Kapellbrücke aus Lego vor dem Pilatus", "format": "landscape", "research": true, "reference": true },
+    { "key": "jungfraubahn", "prompt": "Die Jungfraubahn vor der Jungfrau", "format": "landscape", "research": true, "reference": true },
+    { "key": "kapellbruecke", "prompt": "Die Kapellbrücke in Luzern", "research": true, "reference": true },
+    { "key": "tfbern-shirt", "prompt": "Ein T-Shirt mit dem Logo der TF Bern", "research": true, "reference": true },
+    { "key": "lorraine-lego", "prompt": "Die TF Bern Lorraine als Lego-Modell", "research": true, "reference": true }
+  ],
+  "variants": [
+    { "key": "standard", "lab": { "sampler": "er_sde" } }
+  ]
+}

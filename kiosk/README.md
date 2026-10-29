@@ -14,6 +14,14 @@ node --use-system-ca server.js
 
 Dann `http://localhost:8080` öffnen. `--use-system-ca` lässt Node die Zertifikate von Windows verwenden. Ohne diese Option scheitert die Verbindung zu ask, weil ask ein Zertifikat der Schule nutzt (Fehler `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` im Server-Fenster). Benötigt nur Node.js 18 oder neuer, keine Pakete. Die Seite ist nur vom Kiosk-PC selbst erreichbar (`HOST=0.0.0.0` öffnet sie fürs Netz).
 
+## Auf den Kiosk-PC bringen (ohne Installation)
+
+```bash
+node pack.js
+```
+
+Das erstellt `dist/Kiosk.zip` (ca. 40 MB) mit allem, was der Kiosk braucht, auch `node.exe` im Ordner `node\`. Auf dem Kiosk-PC entpacken (z. B. nach `C:\Kiosk`, nicht im ZIP selbst starten) und `start-kiosk.bat` doppelklicken. Dort muss nichts installiert sein, Edge ist bei Windows dabei. Das Paket enthält den ask-Schlüssel (`data/ask.json`), also nicht weitergeben. Der Bildzähler startet auf dem Kiosk-PC neu.
+
 ## Funktionen
 
 - Prompt-Ideen, Würfel (Wer + macht was + wo) und 8 Stil-Knöpfe
@@ -31,8 +39,8 @@ Dann `http://localhost:8080` öffnen. `--use-system-ca` lässt Node die Zertifik
 
 Bei Prompts mit bestimmten Dingen aus der echten Welt (Orte, Bauwerke, Fahrzeuge, Tierarten …) fragt der Kiosk zuerst ask, das Sprachmodell der Schule (Open WebUI unter `ask.ict-tfbern.ch`). Der Ablauf:
 
-1. **Prüfen** (ca. 1–2 s): ask entscheidet, ob der Prompt Wissen braucht, und schlägt einen Suchbegriff vor. «Eine Katze mit Helm» braucht keins und geht direkt weiter.
-2. **Recherchieren** (ca. 5 s): Die Websuche von Open WebUI liefert Treffer, der Kiosk-Server liest die 3 besten Seiten, ask fasst daraus das Aussehen zusammen. Quellen sind die gelesenen Seiten.
+1. **Prüfen** (ca. 1–2 s): ask entscheidet, ob der Prompt Wissen braucht, und nennt die bestimmten Dinge darin mit Suchbegriff – meist eins, höchstens zwei («Die Roche-Türme vor dem Eiger»). «Eine Katze mit Helm» braucht keins und geht direkt weiter. Eine Stadt oder Gegend als blosser Schauplatz («in Bern», «in den Alpen») zählt nicht als zweites Ding.
+2. **Recherchieren** (ca. 5 s): Die Websuche von Open WebUI liefert Treffer, pro Ding eine eigene Suche. Der Kiosk-Server liest die 3 besten Seiten (bei zwei Dingen je 2), ask fasst daraus das Aussehen beider Dinge zusammen. Quellen sind die gelesenen Seiten.
 3. Die Fakten gehen zusammen mit dem Prompt an den Prompt-Verbesserer (Qwen 9B) und von dort an Flux.
 
 Warum nicht einfach «Websuche an» beim Modell? Über die API von Open WebUI sucht das Modell nicht selbst, es erfindet dann Fakten und Quellen. Deshalb nutzt der Kiosk die Such-Schnittstelle von Open WebUI (`/api/v1/retrieval/process/web/search`) direkt. Open WebUI legt dabei pro Suche eine Sammlung `web-search-…` an, wie bei einer Suche im Chat.
@@ -58,16 +66,20 @@ Alternativ gehen Umgebungsvariablen: `ASK_URL`, `ASK_KEY`, `ASK_MODEL`. Änderun
 
 Nennt ein Wunsch ein bestimmtes echtes Ding (Zytglogge, Matterhorn, Bartgeier, Tesla Cybertruck …), zeigt der Kiosk dem Bildmodell ein Foto davon. Das Motiv sieht dadurch deutlich echter aus. Ablauf:
 
-1. Beim Prüfen nennt ask zusätzlich den passenden deutschen Wikipedia-Artikel, einen englischen Namen des Motivs, ob es eine echte Person ist und ob das Motiv verwandelt wird («als Raumschiff»).
-2. Der Server holt das Hauptbild des Artikels, nur frei lizenzierte Bilder (`pilicense=free`), dazu Urheber und Lizenz von Wikimedia Commons. Er lädt es in den Input-Ordner von ComfyUI und merkt es sich 1 Stunde. Läuft parallel zur Web-Recherche.
-3. Das Foto geht ans Bildmodell (`ReferenceMultiLatent`, 0,5 MP) und an den Prompt-Verbesserer, der es sieht (Systemprompt `system_prompt_edit.txt` aus der ComfyUI-Vorlage «FLUX 3 Image Klein: Image Edit»). Das fertige Bild hat weiterhin die volle Auflösung.
-4. Besucher sehen das Foto mit Urheber und Lizenz unter «Was hat die KI verstanden?».
+1. Beim Prüfen nennt ask für jedes Ding (höchstens zwei) den passenden deutschen Wikipedia-Artikel und einen englischen Namen, dazu ob es eine echte Person ist und ob das Motiv verwandelt wird («als Raumschiff»).
+2. Der Server holt das Hauptbild jedes Artikels, nur frei lizenzierte Bilder (`pilicense=free`), dazu Urheber und Lizenz von Wikimedia Commons. Er lädt es in den Input-Ordner von ComfyUI und merkt es sich 1 Stunde. Läuft parallel zur Web-Recherche.
+3. Die Fotos gehen ans Bildmodell (`ReferenceMultiLatent`, 0,5 MP) und an den Prompt-Verbesserer, der sie sieht (Systemprompt `system_prompt_edit.txt` aus der ComfyUI-Vorlage «FLUX 3 Image Klein: Image Edit»). Bei zwei Fotos heisst es ausdrücklich: beide Dinge in **einer** zusammenhängenden Szene, jedes in seinen echten Proportionen. Das fertige Bild hat weiterhin die volle Auflösung.
+4. Besucher sehen die Fotos mit Urheber und Lizenz unter «Was hat die KI verstanden?», die Technik-Ansicht listet «Referenzbild 1» und «2».
+
+**Falscher oder erfundener Artikelname:** ask nennt manchmal einen Titel, den es nicht gibt («Roche-Türme»), eine Begriffsklärung («Pilatus») oder einen Artikel mit anderer Bedeutung («Jungfrau» = Jungfräulichkeit). Der Server prüft deshalb, ob die englische Wikidata-Beschreibung des Artikels zum englischen Namen passt, und sucht sonst in Wikipedia (zuerst mit dem englischen Namen, dann mit dem Titel). Treffer müssen das erste Namenswort enthalten und dürfen laut Wikidata keine Person sein (sonst kam für «Pilatus» der Sänger Rob Pilatus). Findet sich nichts Passendes, gibt es kein Foto statt eines falschen.
 
 Getestete Regeln (Okt. 2026, rund 60 Vergleichsbilder mit gleichem Seed):
 
+- **Foto als Anhaltspunkt, nicht als Vorlage** (Experimente 22–23, rund 100 Bilder): Wirkt das Foto in allen Malschritten, übernimmt das Bild Blickwinkel, Ausschnitt, Pose und Farbe, und verschiedene Seeds ergeben fast dasselbe Bild. Deshalb wirkt es erst ab 10 % der Schritte (`refRange: [0.1, 1]`, per `ConditioningSetTimestepRange`), die ersten Schritte legen den Bildaufbau nur nach Text an. Dazu sagt der Prompt-Verbesserer ausdrücklich: eigener Blickwinkel, Licht, Wetter und Jahreszeit, nur die wesentlichen Merkmale (`refLoose`). Ergebnis: Motive bleiben erkennbar, aber z. B. eine blaue Vespa statt der weissen vom Foto, das Matterhorn nicht mehr exakt aus der Foto-Perspektive, und 4 Bilder bzw. «Nochmal» unterscheiden sich deutlich. Getestet: nur in den ersten 50 % ≈ wie vorher (die Kopier-Wirkung entsteht am Anfang); ab 25 % gehen Details verloren (Zytglogge-Turmhelm); 10 % und 15 % fast gleich. Beim Schul-Logo und den Standort-Fotos gilt das nicht, dort bleiben die eigens getesteten Regeln.
 - **Verwandlung** («als Raumschiff», ohne Stil-Knopf): freie Formulierung, die neue Form muss sofort erkennbar sein. Recherche-Fakten werden dabei weggelassen, weil sie das Bild zurück zum Foto ziehen.
 - **Sonst** (realistisch oder mit Stil): Look, Farben, Bildausschnitt und Pose des Fotos ausdrücklich nicht übernehmen. Sonst geht ein Comic- oder Aquarell-Stil verloren und Tiere übernehmen die Pose aus dem Foto.
-- Ein Foto reicht; zwei waren schlechter. 0,25, 0,5 und 1 MP sehen gleich aus, 0,5 MP ist schneller als 1 MP. Der Prompt-Verbesserer muss das Foto sehen.
+- Pro Ding ein Foto; zwei Fotos vom *selben* Ding waren schlechter. 0,25, 0,5 und 1 MP sehen gleich aus, 0,5 MP ist schneller als 1 MP. Der Prompt-Verbesserer muss das Foto sehen.
+- **Zwei Dinge** (Experiment 21, 9 Wünsche × 2 Seeds, alt = nur das erste Ding vs. neu = beide): klar besser, wo das Bildmodell das zweite Ding nicht kennt – vorher ein beliebiger Berg statt der Eiger-Nordwand, eine erfundene Fachwerkbrücke statt der Kapellbrücke. Bei bekannten Dingen (Matterhorn, Eiffelturm) gleich gut wie vorher, auch Comic-Stil und Lego bleiben erhalten. Wünsche mit nur einem Ding laufen genau gleich wie vorher (gleicher Auftrag, ComfyUI nimmt sogar das Ergebnis aus dem Cache). Mehrzeit mit zweitem Foto ca. 5–6 s.
 - Keine Fotos und keine Recherche bei echten Personen.
 - Mehrzeit: ca. 1–2 s für das Foto (parallel zur Recherche) und ca. 3 s beim Malen.
 

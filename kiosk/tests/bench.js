@@ -50,21 +50,34 @@ const getBuf = (url) => retry(async () => Buffer.from(await (await fetch(base + 
 async function prepare(p) {
   if (!p.research && !p.reference) return {};
   const key = `${p.prompt}|${!!p.research}|${!!p.reference}`;
-  if (cache[key]) {
+  if (cache[key] && cache[key].plan && cache[key].plan.things) {
     // Reference photos must be known to the running server: fetch again (cheap, cached there).
-    if (cache[key].wiki && p.reference) await post('/api/reference', { wiki: cache[key].wiki });
+    // Take the names from the answer: the server may pick another article now than when the cache was written.
+    if (p.reference) {
+      const refs = [];
+      for (const t of (cache[key].plan.things || []).filter((x) => x.wiki)) {
+        const r = await post('/api/reference', { wiki: t.wiki, subject: t.subject });
+        if (r.reference) refs.push({ name: r.reference.name, subject: t.subject || r.reference.title, transform: !!cache[key].plan.transform, title: r.reference.title });
+      }
+      cache[key].references = refs;
+    }
     return cache[key];
   }
   const plan = await post('/api/research/plan', { prompt: p.prompt });
-  const out = { plan, wiki: plan.wiki };
+  const things = (plan.things || []).filter((t) => t.wiki);
+  const out = { plan, wikis: things.map((t) => t.wiki), references: [] };
   const jobs = [];
-  if (p.research && plan.needed) jobs.push(post('/api/research/run', { prompt: p.prompt, query: plan.query }).then((r) => (out.facts = r.facts || null)));
-  if (p.reference && plan.wiki) {
-    jobs.push(post('/api/reference', { wiki: plan.wiki }).then((r) => {
-      if (r.reference) out.reference = { name: r.reference.name, subject: plan.subject || r.reference.title, transform: !!plan.transform, title: r.reference.title };
-    }));
+  if (p.research && plan.needed) {
+    jobs.push(post('/api/research/run', { prompt: p.prompt, queries: plan.queries }).then((r) => (out.facts = r.facts || null)));
+    if (plan.queries.length > 1) jobs.push(post('/api/research/run', { prompt: p.prompt, queries: plan.queries.slice(0, 1) }).then((r) => (out.factsFirst = r.facts || null)));
+  }
+  if (p.reference) {
+    things.forEach((t, i) => jobs.push(post('/api/reference', { wiki: t.wiki, subject: t.subject }).then((r) => {
+      if (r.reference) out.references[i] = { name: r.reference.name, subject: t.subject || r.reference.title, transform: !!plan.transform, title: r.reference.title };
+    })));
   }
   await Promise.all(jobs);
+  out.references = out.references.filter(Boolean);
   cache[key] = out;
   fs.writeFileSync(cacheFile, JSON.stringify(cache, null, 2));
   return out;
@@ -109,8 +122,9 @@ function gpuSeconds(h) {
           advanced: { steps: lab.steps || 16, sampler: lab.sampler || 'euler', upsampler: v.upsampler !== false, ...(v.advanced || {}) },
           variation: !!(v.variation || p.variation),
           transform: !!(prep.plan && prep.plan.transform),
-          facts: v.noFacts ? null : prep.facts || null,
-          reference: v.noReference ? null : prep.reference || null,
+          facts: v.noFacts ? null : (v.old && prep.factsFirst !== undefined ? prep.factsFirst : prep.facts) || null,
+          // old: the behaviour before two things were supported (one photo and a search for the first thing only).
+          references: v.noReference ? [] : v.old ? (prep.references || []).slice(0, 1) : prep.references || [],
         };
         try {
           const g = await post('/api/generate', body);
@@ -126,7 +140,7 @@ function gpuSeconds(h) {
           results[id] = {
             prompt: p.key, variant: v.key, seed, gpu: gpuSeconds(h), info: g.info,
             caption: (h.outputs['13'] && h.outputs['13'].text[0]) || '',
-            reference: prep.reference ? prep.reference.title : null, facts: !!prep.facts,
+            references: (prep.references || []).map((r) => r.title), facts: !!prep.facts, request: g.info && g.info.reference,
           };
           console.log(`[${n}/${total}] ${id}  ${results[id].gpu ? results[id].gpu.toFixed(1) + ' s' : ''}`);
         } catch (e) {

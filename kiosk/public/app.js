@@ -361,7 +361,7 @@
       id: null, prompt, format, count, style, info: null, images: [], selected: 0,
       started: false, done: false, tokens: 0, caption: '',
       upsampler: adv ? adv.upsampler : settings.upsampler,
-      showResearch: false, researchQuery: '', research: null, reference: null, abort: new AbortController(),
+      showResearch: false, researchQuery: '', research: null, references: [], abort: new AbortController(),
       t: { start: 0, researchStart: 0, researchEnd: 0, textStart: 0, textEnd: 0, imageStart: 0, imageEnd: 0, end: 0 },
     };
     setState('generating');
@@ -378,10 +378,8 @@
       if (researchWanted() || referenceWanted()) await research(current);
       if (!stillCurrent()) return;
       const facts = current.research ? current.research.facts : null;
-      const reference = current.reference
-        ? { name: current.reference.name, subject: current.reference.subject, transform: current.reference.transform }
-        : null;
-      const data = await postJson('/api/generate', { prompt, format, style, variants: count, advanced: adv, facts, reference, variation,
+      const references = current.references.map((r) => ({ name: r.name, subject: r.subject, transform: r.transform }));
+      const data = await postJson('/api/generate', { prompt, format, style, variants: count, advanced: adv, facts, references, variation,
         transform: !!(current.plan && current.plan.transform), clientId });
       if (current !== job || current.done) {
         ignoredIds.add(data.promptId);
@@ -410,36 +408,45 @@
     } catch {}
     if (current !== job || current.done) return;
     current.plan = plan;
-    const doResearch = !!(plan && plan.needed && researchWanted());
-    const doReference = !!(plan && plan.wiki && referenceWanted());
+    // Up to two named things (e.g. "die Roche-Türme vor dem Eiger"): one search and one photo each.
+    const things = (plan && Array.isArray(plan.things)) ? plan.things : [];
+    const queries = (plan && plan.queries) || [];
+    const wikis = referenceWanted() ? things.filter((t) => t.wiki) : [];
+    const doResearch = !!(plan && plan.needed && queries.length && researchWanted());
+    const doReference = wikis.length > 0;
     if (!doResearch && !doReference) {
       current.showResearch = false;
       current.t.researchStart = 0;
       return;
     }
-    if (doResearch) current.researchQuery = plan.query;
+    if (doResearch) current.researchQuery = queries.join(' · ');
     current.preparing = true;
-    const label = doResearch && doReference ? 'Die KI recherchiert im Web und sucht ein Referenzbild'
-      : doResearch ? 'Die KI recherchiert im Web' : 'Die KI sucht ein Referenzbild';
-    setProgress(label, `«${doResearch ? plan.query : plan.wiki}»`, null, 'research');
+    const photo = wikis.length > 1 ? 'Referenzbilder' : 'ein Referenzbild';
+    const label = doResearch && doReference ? `Die KI recherchiert im Web und sucht ${photo}`
+      : doResearch ? 'Die KI recherchiert im Web' : `Die KI sucht ${photo}`;
+    const shown = doResearch ? queries : wikis.map((t) => t.wiki);
+    setProgress(label, shown.map((s) => `«${s}»`).join(' und '), null, 'research');
 
     const tasks = [];
     if (doResearch) {
-      tasks.push(postJson('/api/research/run', { prompt: current.prompt, query: plan.query }, signal)
+      tasks.push(postJson('/api/research/run', { prompt: current.prompt, queries }, signal)
         .then((r) => { if (r && r.facts) current.research = r; })
         .catch(() => {}));
     }
-    if (doReference) {
-      tasks.push(postJson('/api/reference', { wiki: plan.wiki }, signal)
+    const found = [];
+    wikis.forEach((t, i) => {
+      tasks.push(postJson('/api/reference', { wiki: t.wiki, subject: t.subject }, signal)
         .then((r) => {
-          if (r && r.reference) current.reference = { ...r.reference, subject: plan.subject || r.reference.title, transform: !!plan.transform };
+          if (r && r.reference) found[i] = { ...r.reference, subject: t.subject || r.reference.title, transform: !!plan.transform };
         })
         .catch(() => {}));
-    }
+    });
     await Promise.all(tasks);
+    // Keep the order of the plan (most important thing first); two articles may share one photo.
+    current.references = found.filter((r, i) => r && found.findIndex((x) => x && x.name === r.name) === i);
     current.t.researchEnd = performance.now();
     if (current !== job || current.done) return;
-    if (!current.research && !current.reference) setProgress('Recherche nicht möglich, es geht ohne weiter', '', frac('research', 1), 'research');
+    if (!current.research && !current.references.length) setProgress('Recherche nicht möglich, es geht ohne weiter', '', frac('research', 1), 'research');
     else renderCaption();
   }
 
@@ -525,7 +532,7 @@
       el.grid.hidden = true;
       el.showAll.hidden = true;
     }
-    el.showCaption.hidden = !job.caption && !job.research && !job.reference && !(job.info && job.info.site);
+    el.showCaption.hidden = !job.caption && !job.research && !job.references.length && !(job.info && job.info.site);
     setState('result');
   }
 
@@ -575,19 +582,20 @@
       fig.append(img, cap);
       parts.push(fig);
     }
-    if (job.reference && !site) {
-      const ref = job.reference;
-      para('Dieses Foto hat die KI als Vorlage angeschaut', 'overlay-sub');
-      const fig = document.createElement('figure');
-      fig.className = 'ref-figure';
-      const img = document.createElement('img');
-      img.src = referenceUrl(ref);
-      img.alt = `Referenzfoto: ${ref.title}`;
-      const cap = document.createElement('figcaption');
-      // CC BY-SA and similar licenses require naming the author and the license.
-      cap.textContent = `${ref.title} · Foto: ${ref.artist || 'unbekannt'} · ${ref.license} · Wikimedia Commons`;
-      fig.append(img, cap);
-      parts.push(fig);
+    if (job.references.length && !site) {
+      para(job.references.length > 1 ? 'Diese Fotos hat die KI als Vorlage angeschaut' : 'Dieses Foto hat die KI als Vorlage angeschaut', 'overlay-sub');
+      for (const ref of job.references) {
+        const fig = document.createElement('figure');
+        fig.className = 'ref-figure';
+        const img = document.createElement('img');
+        img.src = referenceUrl(ref);
+        img.alt = `Referenzfoto: ${ref.title}`;
+        const cap = document.createElement('figcaption');
+        // CC BY-SA and similar licenses require naming the author and the license.
+        cap.textContent = `${ref.title} · Foto: ${ref.artist || 'unbekannt'} · ${ref.license} · Wikimedia Commons`;
+        fig.append(img, cap);
+        parts.push(fig);
+      }
     }
     if (job.research) {
       para('Das hat die KI im Web recherchiert', 'overlay-sub');
@@ -599,7 +607,7 @@
       if (hosts.length) para('Quellen: ' + hosts.join(', '), 'lang');
     }
     if (job.caption) {
-      if (job.research || job.reference) para('Daraus wurde diese Bildbeschreibung', 'overlay-sub');
+      if (job.research || job.references.length) para('Daraus wurde diese Bildbeschreibung', 'overlay-sub');
       para(job.caption);
       para('Die Beschreibung ist auf Englisch, weil das Bildmodell Englisch am besten versteht.', 'lang');
     }
@@ -617,9 +625,11 @@
     add('Sprachmodell', i.languageModel || 'aus (Text direkt ans Bildmodell)');
     if (i.site) add('Standort-Foto', `${i.site.title} (${i.site.credit})`);
     if (i.logo) add('Logo-Referenz', 'Logo der Technischen Fachschule Bern');
-    if (job.reference && !i.site) {
+    if (job.references.length && !i.site) {
       const mode = i.reference && i.reference.mode === 'transform' ? 'frei verwandeln' : 'Aussehen übernehmen, Stil und Pose frei';
-      add('Referenzbild', `${job.reference.title} (Wikipedia), ${job.reference.license}, eingelesen mit 0,5 Megapixel, Modus: ${mode}`);
+      job.references.forEach((ref, n) => {
+        add(job.references.length > 1 ? `Referenzbild ${n + 1}` : 'Referenzbild', `${ref.title} (Wikipedia), ${ref.license}, eingelesen mit 0,5 Megapixel, Modus: ${mode}`);
+      });
     }
     if (job.researchQuery) {
       add('Recherche', job.research

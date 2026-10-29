@@ -1,0 +1,20 @@
+{
+  "name": "23 Referenz-Stärke bestätigen: jetzt vs. ab 10 % vs. ab 15 % vs. locker + ab 10 %, verschiedene Wunsch-Arten",
+  "seeds": [23101, 23202],
+  "prompts": [
+    { "key": "roche-eiger", "prompt": "Die Roche-Türme vor dem Eiger in den Schweizer Alpen", "format": "landscape", "research": true, "reference": true },
+    { "key": "zytglogge-matterhorn", "prompt": "Der Zytglogge vor dem Matterhorn", "research": true, "reference": true },
+    { "key": "steinbock-kapellbruecke", "prompt": "Ein Steinbock auf der Kapellbrücke", "format": "landscape", "research": true, "reference": true },
+    { "key": "bartgeier", "prompt": "Ein Bartgeier über dem Gletscher", "research": true, "reference": true },
+    { "key": "chillon", "prompt": "Das Schloss Chillon im Nebel", "format": "landscape", "research": true, "reference": true },
+    { "key": "matterhorn-comic", "prompt": "Das Matterhorn", "style": "comic", "research": true, "reference": true },
+    { "key": "zytglogge-raumschiff", "prompt": "Der Zytglogge als Raumschiff", "research": true, "reference": true },
+    { "key": "vespa", "prompt": "Eine Vespa vor einem Café", "research": true, "reference": true }
+  ],
+  "variants": [
+    { "key": "jetzt", "lab": { "sampler": "er_sde" } },
+    { "key": "ab10", "lab": { "sampler": "er_sde", "refRange": [0.1, 1] } },
+    { "key": "ab15", "lab": { "sampler": "er_sde", "refRange": [0.15, 1] } },
+    { "key": "locker-ab10", "lab": { "sampler": "er_sde", "refLoose": true, "refRange": [0.1, 1] } }
+  ]
+}

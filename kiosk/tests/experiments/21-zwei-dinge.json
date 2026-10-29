@@ -1,0 +1,19 @@
+{
+  "name": "21 Zwei benannte Dinge: alt (1 Foto, Recherche nur zum ersten) vs. neu (2 Fotos, Recherche zu beiden)",
+  "seeds": [21101, 21202],
+  "prompts": [
+    { "key": "roche-eiger", "prompt": "Die Roche-Türme vor dem Eiger in den Schweizer Alpen", "format": "landscape", "research": true, "reference": true },
+    { "key": "zytglogge-matterhorn", "prompt": "Der Zytglogge vor dem Matterhorn", "research": true, "reference": true },
+    { "key": "steinbock-kapellbruecke", "prompt": "Ein Steinbock auf der Kapellbrücke", "format": "landscape", "research": true, "reference": true },
+    { "key": "eiffel-bundeshaus", "prompt": "Der Eiffelturm neben dem Bundeshaus", "research": true, "reference": true },
+    { "key": "bartgeier-matterhorn", "prompt": "Ein Bartgeier fliegt über das Matterhorn", "format": "landscape", "research": true, "reference": true },
+    { "key": "lego-kapellbruecke-pilatus", "prompt": "Die Kapellbrücke aus Lego vor dem Pilatus", "format": "landscape", "research": true, "reference": true },
+    { "key": "glacier-landwasser", "prompt": "Ein Glacier Express auf dem Landwasserviadukt", "format": "landscape", "research": true, "reference": true },
+    { "key": "roche-eiger-comic", "prompt": "Die Roche-Türme vor dem Eiger", "style": "comic", "research": true, "reference": true },
+    { "key": "kontrolle-zytglogge", "prompt": "Der Zytglogge in Bern im Winter", "research": true, "reference": true }
+  ],
+  "variants": [
+    { "key": "alt", "old": true, "lab": { "sampler": "er_sde" } },
+    { "key": "neu", "lab": { "sampler": "er_sde" } }
+  ]
+}

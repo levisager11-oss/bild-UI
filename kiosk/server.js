@@ -193,22 +193,25 @@ Decide whether drawing it well needs factual knowledge about a specific real-wor
 - artworks, traditions, historical or recent events
 Everyday things and generic scenes do NOT need it: a cat, a dog, a fox, a horse, a cow, a penguin, a robot in a workshop, a city of the future, a dragon made of gears, a unicorn.
 A city or country that is only the setting (a cat cycling through Bern) does not need it either. Never add a landmark the request does not name.
-If research is needed, name the single most important thing so a reference photo can be taken from Wikipedia.
+If research is needed, list the specific things it needs, the most important first, so a reference photo of each can be taken from Wikipedia.
+Usually that is one thing. List a second one only when the request itself names two specific things that both need it (e.g. "the Zytglogge in front of the Matterhorn", "an ibex on the Kapellbrücke"). Never more than two.
 Reply with JSON only:
 {"needed": true or false,
- "query": "short web search query that finds what the thing looks like",
- "wiki": "exact title of the German Wikipedia article about that thing, or empty",
- "subject": "short English name of that thing, e.g. the Zytglogge clock tower, or empty",
+ "things": [{"query": "short web search query that finds what this thing looks like",
+             "wiki": "exact title of the German Wikipedia article about this thing, or empty; for names with several meanings the title of the meant article, e.g. Jungfrau (Berg), Mönch (Berg), Pilatus (Bergmassiv), Merkur (Planet)",
+             "subject": "short English name of this thing, e.g. the Zytglogge clock tower"}],
  "person": true if the request shows a real, named person or a group of real people (e.g. Roger Federer, the Swiss Federal Council, a famous band),
- "transform": true if the request turns that thing into something else or changes its form (e.g. as a spaceship, made of chocolate, as a robot, built from bricks), false if it is shown as it is, also when only a drawing style is asked}`;
+ "transform": true if the request turns a listed thing into something else or changes its form (e.g. as a spaceship, made of chocolate, as a robot, built from bricks), false if it is shown as it is, also when only a drawing style is asked}
+"things" is empty when research is not needed.`;
 
 const SEARCH_PROMPT = `Research the visual appearance of the specific real-world things in an image request. Use the web search.
-Then reply with JSON only: {"facts": "3 to 6 short English sentences with visual facts only: shape, colors, materials, size, typical surroundings, distinctive details", "sources": [{"title": "page title", "url": "https://..."}]}.
+Then reply with JSON only: {"facts": "3 to 6 short English sentences per named thing with visual facts only: shape, colors, materials, size, typical surroundings, distinctive details", "sources": [{"title": "page title", "url": "https://..."}]}.
 Describe the lasting appearance only, no special events, light shows or temporary decorations unless the request asks for them.
 No opinions, no history that cannot be seen, no text or labels to render.`;
 
 const SUMMARY_PROMPT = `You get an image request and text from web pages found for it. Extract what the specific real-world things look like, using only the web page text.
-Reply with JSON only: {"facts": "3 to 6 short English sentences with visual facts only: shape, colors, materials, size, typical surroundings, distinctive details"}.
+Reply with JSON only: {"facts": "3 to 6 short English sentences per named thing with visual facts only: shape, colors, materials, size, typical surroundings, distinctive details"}.
+When the request names two things, describe each of them, and do not mix up which facts belong to which.
 Describe the lasting appearance only: leave out special events, light shows, festivals, temporary decorations, construction work and seasonal markets, unless the request asks for them.
 No opinions, no history that cannot be seen, no text or labels to render. If the pages say nothing useful about the appearance, reply {"facts": ""}.`;
 
@@ -239,7 +242,7 @@ async function fetchPageText(url) {
 }
 
 // Search via Open WebUI, read the top pages, summarize the appearance with the model.
-async function researchOpenWebUI(prompt, query) {
+async function webSearch(query) {
   const c = askConfig();
   const r = await fetch(c.url + '/v1/retrieval/process/web/search', {
     method: 'POST',
@@ -248,13 +251,27 @@ async function researchOpenWebUI(prompt, query) {
     signal: AbortSignal.timeout(10000),
   });
   if (!r.ok) throw new Error(`Websuche antwortet mit HTTP ${r.status}`);
-  const items = ((await r.json()).items || []).filter((i) => /^https?:\/\//.test(i.link || ''));
-  if (!items.length) return { facts: '', sources: [] };
+  return ((await r.json()).items || []).filter((i) => /^https?:\/\//.test(i.link || ''));
+}
 
-  const top = items.slice(0, 3);
+// One search per named thing (at most two), so the second thing is not drowned by results about the first.
+async function researchOpenWebUI(prompt, queries) {
+  const c = askConfig();
+  const lists = await Promise.all(queries.map(webSearch));
+  const perQuery = queries.length > 1 ? 2 : 3;
+  const seen = new Set();
+  const top = [];
+  const rest = [];
+  for (const items of lists) {
+    const fresh = items.filter((i) => !seen.has(i.link) && seen.add(i.link));
+    top.push(...fresh.slice(0, perQuery));
+    rest.push(...fresh.slice(perQuery, perQuery + (queries.length > 1 ? 3 : 5)));
+  }
+  if (!top.length) return { facts: '', sources: [] };
+
   const texts = await Promise.all(top.map((i) => fetchPageText(i.link)));
   const material = top.map((it, n) => `### ${it.title}\n${it.link}\n${texts[n] || it.snippet || ''}`).join('\n\n')
-    + '\n\nOther search snippets:\n' + items.slice(3, 8).map((i) => `- ${i.title}: ${i.snippet || ''}`).join('\n');
+    + '\n\nOther search snippets:\n' + rest.map((i) => `- ${i.title}: ${i.snippet || ''}`).join('\n');
 
   const { text } = await askChat(SUMMARY_PROMPT, `Image request: ${prompt}\n\nWeb pages:\n${material}`, c.searchExtra);
   const answer = parseJsonAnswer(text);
@@ -264,8 +281,8 @@ async function researchOpenWebUI(prompt, query) {
 }
 
 // The model searches by itself (only if the backend supports it through searchExtra).
-async function researchModel(prompt, query) {
-  const { text, sources: attached } = await askChat(SEARCH_PROMPT, `Image request: ${prompt}\nSearch query: ${query}`, askConfig().searchExtra);
+async function researchModel(prompt, queries) {
+  const { text, sources: attached } = await askChat(SEARCH_PROMPT, `Image request: ${prompt}\nSearch queries: ${queries.join(' | ')}`, askConfig().searchExtra);
   const answer = parseJsonAnswer(text);
   let facts = answer ? answer.facts : text;
   if (Array.isArray(facts)) facts = facts.join(' ');
@@ -275,6 +292,8 @@ async function researchModel(prompt, query) {
 // Successful ask answers per request, kept for 1 hour: ideas get tapped again and again,
 // and "Nochmal" should not wait for ask a second time.
 const ASK_CACHE_MS = 60 * 60 * 1000;
+// Research facts are cut to this length (room for two named things).
+const MAX_FACTS = 1600;
 const askCache = new Map();
 function cached(key) {
   const hit = askCache.get(key);
@@ -303,14 +322,23 @@ async function handleResearchPlan(req, res) {
       if (!plan) throw new Error('ask lieferte kein JSON');
       remember(key, plan);
     }
-    const query = String(plan.query || '').trim().slice(0, 200);
-    const wiki = settings.reference && plan.person !== true ? String(plan.wiki || '').trim().slice(0, 150) : '';
+    // Up to two named things, each with its own search and Wikipedia photo. Older answers had one thing at the top level.
+    const raw = Array.isArray(plan.things) ? plan.things : [plan];
+    const seen = new Set();
+    const things = raw
+      .filter((t) => t && typeof t === 'object')
+      .map((t) => {
+        const wiki = settings.reference && plan.person !== true ? String(t.wiki || '').trim().slice(0, 150) : '';
+        return { query: String(t.query || '').trim().slice(0, 200), wiki, subject: String(t.subject || '').trim().slice(0, 100) || wiki };
+      })
+      .filter((t) => (t.query || t.wiki) && !seen.has((t.wiki || t.query).toLowerCase()) && seen.add((t.wiki || t.query).toLowerCase()))
+      .slice(0, 2);
+    const queries = things.map((t) => t.query).filter(Boolean);
     sendJson(res, 200, {
       // No research and no reference photo for real people.
-      needed: settings.research && plan.needed === true && plan.person !== true && !!query,
-      query,
-      wiki,
-      subject: String(plan.subject || '').trim().slice(0, 100) || wiki,
+      needed: settings.research && plan.needed === true && plan.person !== true && queries.length > 0,
+      things,
+      queries,
       transform: plan.transform === true,
       person: plan.person === true,
     });
@@ -328,16 +356,17 @@ async function handleResearchRun(req, res) {
     return sendJson(res, 400, { error: 'Ungültige Anfrage' });
   }
   const prompt = String(body.prompt || '').trim().slice(0, 1000);
-  const query = String(body.query || '').trim().slice(0, 200);
-  if (!settings.research || !askConfig().configured || !prompt) return sendJson(res, 200, { facts: null, off: true });
+  const queries = (Array.isArray(body.queries) ? body.queries : [body.query])
+    .map((q) => String(q || '').trim().slice(0, 200)).filter(Boolean).slice(0, 2);
+  if (!settings.research || !askConfig().configured || !prompt || !queries.length) return sendJson(res, 200, { facts: null, off: true });
   const t0 = Date.now();
   try {
     const c = askConfig();
-    const key = `run:${prompt.toLowerCase()}|${query.toLowerCase()}`;
+    const key = `run:${prompt.toLowerCase()}|${queries.join('|').toLowerCase()}`;
     const hit = cached(key);
     if (hit) return sendJson(res, 200, { ...hit, ms: Date.now() - t0, cached: true });
-    const result = c.search === 'model' ? await researchModel(prompt, query) : await researchOpenWebUI(prompt, query);
-    const facts = result.facts.slice(0, 1200);
+    const result = c.search === 'model' ? await researchModel(prompt, queries) : await researchOpenWebUI(prompt, queries);
+    const facts = result.facts.slice(0, MAX_FACTS);
     const seen = new Set();
     const sources = result.sources
       .filter((s) => s && /^https?:\/\//.test(s.url || '') && !seen.has(s.url) && seen.add(s.url))
@@ -370,45 +399,99 @@ async function wikiJson(url) {
 
 const stripHtml = (s) => String(s || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
 
-async function findReference(title) {
+// ask sometimes names an article that does not exist ("Roche-Türme") or a disambiguation page ("Roche-Turm").
+// Then the Wikipedia search picks the article. It must contain the first name word of the asked title (Roche, Pilatus),
+// so a made-up "Xyz-Turm" does not bring in some other tower.
+const words = (s) => String(s).toLowerCase().normalize('NFC').split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4);
+// The English name from the planning step ("the Pilatus mountain near Lucerne") is searched first: a bare
+// "Pilatus" also finds Pontius Pilatus, a singer and an aircraft maker.
+async function findReference(title, subject = '') {
   for (const lang of ['de', 'en']) {
-    const api = `https://${lang}.wikipedia.org/w/api.php?format=json&action=query&redirects=1`;
-    const d = await wikiJson(`${api}&prop=pageimages|info&inprop=url&piprop=thumbnail|name&pithumbsize=1024&pilicense=free&titles=${encodeURIComponent(title)}`);
-    const page = Object.values((d.query && d.query.pages) || {})[0];
-    if (!page || page.missing !== undefined || !page.pageimage || !page.thumbnail) continue;
-    if (/\.(svg|gif|tiff?)$/i.test(page.pageimage)) continue; // maps, logos, diagrams
-    const fileTitle = 'File:' + page.pageimage;
-    const m = await wikiJson(`${api}&prop=imageinfo&iiprop=extmetadata|url&titles=${encodeURIComponent(fileTitle)}`);
-    const info = Object.values((m.query && m.query.pages) || {})[0];
-    const meta = (info && info.imageinfo && info.imageinfo[0] && info.imageinfo[0].extmetadata) || {};
-    const license = stripHtml(meta.LicenseShortName && meta.LicenseShortName.value);
-    if (!license) continue;
-
-    const img = await fetch(page.thumbnail.source, { headers: WIKI_UA, signal: AbortSignal.timeout(8000) });
-    if (!img.ok) throw new Error(`Bild nicht ladbar (HTTP ${img.status})`);
-    const buf = Buffer.from(await img.arrayBuffer());
-    const name = `kiosk_ref_${crypto.createHash('sha1').update(lang + ':' + page.title).digest('hex').slice(0, 16)}.jpg`;
-    const form = new FormData();
-    form.append('image', new Blob([buf], { type: img.headers.get('content-type') || 'image/jpeg' }), name);
-    form.append('type', 'input');
-    form.append('overwrite', 'true');
-    const up = await fetch(new URL('/upload/image', COMFY_URL), { method: 'POST', body: form, signal: AbortSignal.timeout(10000) });
-    if (!up.ok) throw new Error(`Upload zu ComfyUI fehlgeschlagen (HTTP ${up.status})`);
-    const uploaded = await up.json();
-    return {
-      name: uploaded.name,
-      title: page.title,
-      pageUrl: page.fullurl,
-      file: page.pageimage,
-      fileUrl: (info.imageinfo[0] && info.imageinfo[0].descriptionurl) || '',
-      license,
-      // Drop Wikipedia signature timestamps like "13:37, 2 July 2006 (UTC)".
-      artist: stripHtml(meta.Artist && meta.Artist.value).replace(/,?\s*\d{1,2}:\d{2},?\s+\d{1,2}\.?\s+\S+\s+\d{4}\s*\(UTC\)/g, '').trim().slice(0, 120),
-      width: page.thumbnail.width,
-      height: page.thumbnail.height,
-    };
+    const ref = await referenceFromPage(lang, title, { subject });
+    if (ref) return ref;
+  }
+  const key = words(title)[0];
+  if (!key) return null;
+  const searches = [
+    ...(subject ? [['en', subject.replace(/^(the|a|an)\s+/i, '')]] : []),
+    ['de', title],
+    ['en', title],
+  ];
+  for (const [lang, q] of searches) {
+    const s = await wikiJson(`https://${lang}.wikipedia.org/w/api.php?format=json&action=query&list=search&srlimit=3&srsearch=${encodeURIComponent(q)}`);
+    const hits = ((s.query && s.query.search) || []).map((x) => x.title).filter((t) => words(t).includes(key));
+    for (const t of hits.slice(0, 2)) {
+      const ref = await referenceFromPage(lang, t, { noPeople: true, subject });
+      if (ref) return ref;
+    }
   }
   return null;
+}
+
+// Wikidata "instance of: human" (P31 = Q5). Search hits can be people even when the request means a mountain.
+async function isHuman(item) {
+  if (!item) return false;
+  const d = await wikiJson(`https://www.wikidata.org/w/api.php?format=json&action=wbgetclaims&property=P31&entity=${encodeURIComponent(item)}`);
+  return ((d.claims && d.claims.P31) || []).some((c) => c.mainsnak && c.mainsnak.datavalue && c.mainsnak.datavalue.value && c.mainsnak.datavalue.value.id === 'Q5');
+}
+
+// Does the article fit the English name from the planning step? A title can exist with another meaning:
+// "Jungfrau" is virginity in German, "Merkur" a car brand in English. Compared with the English Wikidata label,
+// description and aliases ("covered bridge in Lucerne" fits "the Chapel Bridge in Lucerne"). Words match on
+// their first 5 letters (tower/towers). Without a subject or a Wikidata item the article is accepted.
+const FILLER = new Set(['with', 'from', 'near', 'over', 'into', 'their', 'that', 'this']);
+async function fitsSubject(item, pageTitle, subject) {
+  const want = words(subject).filter((w) => !FILLER.has(w)).map((w) => w.slice(0, 5));
+  if (!item || !want.length) return true;
+  const d = await wikiJson(`https://www.wikidata.org/w/api.php?format=json&action=wbgetentities&props=labels|descriptions|aliases&languages=en|de&ids=${encodeURIComponent(item)}`);
+  const e = (d.entities && d.entities[item]) || {};
+  const texts = [pageTitle];
+  for (const k of ['labels', 'descriptions']) for (const v of Object.values(e[k] || {})) texts.push(v.value);
+  for (const list of Object.values(e.aliases || {})) for (const v of list) texts.push(v.value);
+  const have = new Set(words(texts.join(' ')).map((w) => w.slice(0, 5)));
+  return want.some((w) => have.has(w));
+}
+
+async function referenceFromPage(lang, title, { noPeople = false, subject = '' } = {}) {
+  const api = `https://${lang}.wikipedia.org/w/api.php?format=json&action=query&redirects=1`;
+  const d = await wikiJson(`${api}&prop=pageimages|info|pageprops&ppprop=disambiguation|wikibase_item&inprop=url&piprop=thumbnail|name&pithumbsize=1024&pilicense=free&titles=${encodeURIComponent(title)}`);
+  const page = Object.values((d.query && d.query.pages) || {})[0];
+  if (!page || page.missing !== undefined || !page.pageimage || !page.thumbnail) return null;
+  if (page.pageprops && page.pageprops.disambiguation !== undefined) return null;
+  if (/\.(svg|gif|tiff?)$/i.test(page.pageimage)) return null; // maps, logos, diagrams
+  const item = page.pageprops && page.pageprops.wikibase_item;
+  if (noPeople && await isHuman(item)) return null;
+  if (subject && !(await fitsSubject(item, page.title, subject))) return null;
+  const fileTitle = 'File:' + page.pageimage;
+  const m = await wikiJson(`${api}&prop=imageinfo&iiprop=extmetadata|url&titles=${encodeURIComponent(fileTitle)}`);
+  const info = Object.values((m.query && m.query.pages) || {})[0];
+  const meta = (info && info.imageinfo && info.imageinfo[0] && info.imageinfo[0].extmetadata) || {};
+  const license = stripHtml(meta.LicenseShortName && meta.LicenseShortName.value);
+  if (!license) return null;
+
+  const img = await fetch(page.thumbnail.source, { headers: WIKI_UA, signal: AbortSignal.timeout(8000) });
+  if (!img.ok) throw new Error(`Bild nicht ladbar (HTTP ${img.status})`);
+  const buf = Buffer.from(await img.arrayBuffer());
+  const name = `kiosk_ref_${crypto.createHash('sha1').update(lang + ':' + page.title).digest('hex').slice(0, 16)}.jpg`;
+  const form = new FormData();
+  form.append('image', new Blob([buf], { type: img.headers.get('content-type') || 'image/jpeg' }), name);
+  form.append('type', 'input');
+  form.append('overwrite', 'true');
+  const up = await fetch(new URL('/upload/image', COMFY_URL), { method: 'POST', body: form, signal: AbortSignal.timeout(10000) });
+  if (!up.ok) throw new Error(`Upload zu ComfyUI fehlgeschlagen (HTTP ${up.status})`);
+  const uploaded = await up.json();
+  return {
+    name: uploaded.name,
+    title: page.title,
+    pageUrl: page.fullurl,
+    file: page.pageimage,
+    fileUrl: (info.imageinfo[0] && info.imageinfo[0].descriptionurl) || '',
+    license,
+    // Drop Wikipedia signature timestamps like "13:37, 2 July 2006 (UTC)".
+    artist: stripHtml(meta.Artist && meta.Artist.value).replace(/,?\s*\d{1,2}:\d{2},?\s+\d{1,2}\.?\s+\S+\s+\d{4}\s*\(UTC\)/g, '').trim().slice(0, 120),
+    width: page.thumbnail.width,
+    height: page.thumbnail.height,
+  };
 }
 
 async function handleReference(req, res) {
@@ -419,12 +502,14 @@ async function handleReference(req, res) {
     return sendJson(res, 400, { error: 'Ungültige Anfrage' });
   }
   const title = String(body.wiki || '').trim().slice(0, 150);
+  const subject = String(body.subject || '').trim().slice(0, 100);
   if (!settings.reference || !title) return sendJson(res, 200, { reference: null, off: true });
-  const cached = refCache.get(title);
+  const cacheKey = `${title}|${subject}`;
+  const cached = refCache.get(cacheKey);
   if (cached && Date.now() - cached.at < REF_CACHE_MS) return sendJson(res, 200, { reference: cached.ref, cached: true });
   try {
-    const ref = await findReference(title);
-    refCache.set(title, { at: Date.now(), ref });
+    const ref = await findReference(title, subject);
+    refCache.set(cacheKey, { at: Date.now(), ref });
     sendJson(res, 200, { reference: ref });
   } catch (e) {
     console.error('reference failed:', errText(e));
@@ -507,10 +592,25 @@ const randomSeed = () => crypto.randomInt(0, 2 ** 48 - 1);
 // How to tell the upsampler about the reference photo. Tested in Oct. 2026:
 // "transform" works best when the thing becomes something else, "faithful" for styles and plain depictions
 // (otherwise the photo's look, framing and pose get copied and a chosen style gets lost).
+// With two photos (two named things) the wording is the same, in plural, and both things go into one scene.
+const ORDINALS = ['first', 'second', 'third'];
+const photosOf = (subjects) => subjects.length === 1
+  ? `The first image is a photo of ${subjects[0]}`
+  : `The first image is a photo of ${subjects[0]} and the second image is a photo of ${subjects[1]}`;
 const REFERENCE_REQUEST = {
-  transform: (p, s) => `Create a new image for this request (a description of the picture, not text to show): ${p}\nThe first image is a photo of ${s}, only so you know its real shape and details. Follow the request boldly and creatively: transform, restage and relight ${s} exactly as the request asks. The result may look very different from the photo; only the recognizable design of ${s} is taken from it. The new form asked for must be obvious at first glance, and the surroundings fit the new form, not the photo.`,
-  faithful: (p, s) => `Create a new image for this request (a description of the picture, not text to show): ${p}\nThe first image is a photo of ${s}, given only so you know its real shape and details. Do not copy the photo's look, colors, framing, viewpoint or pose. Follow the request boldly: restage, transform and render the whole image fully in the requested style or medium; only the recognizable design of ${s} comes from the photo.`,
+  transform: (p, subjects) => {
+    const s = subjects.join(' and ');
+    const one = subjects.length === 1;
+    return `Create a new image for this request (a description of the picture, not text to show): ${p}\n${photosOf(subjects)}, only so you know ${one ? 'its' : 'their'} real shape and details. Follow the request boldly and creatively: transform, restage and relight ${s} exactly as the request asks. The result may look very different from the ${one ? 'photo' : 'photos'}; only the recognizable design of ${s} is taken from ${one ? 'it' : 'them'}. The new form asked for must be obvious at first glance, and the surroundings fit the new form, not the ${one ? 'photo' : 'photos'}.${one ? '' : TWO_THINGS}`;
+  },
+  faithful: (p, subjects) => {
+    const s = subjects.join(' and ');
+    const one = subjects.length === 1;
+    return `Create a new image for this request (a description of the picture, not text to show): ${p}\n${photosOf(subjects)}, given only so you know ${one ? 'its' : 'their'} real shape and details. Do not copy the ${one ? "photo's" : "photos'"} look, colors, framing, viewpoint or pose. Follow the request boldly: restage, transform and render the whole image fully in the requested style or medium; only the recognizable design of ${s} comes from the ${one ? 'photo' : 'photos'}.${one ? '' : TWO_THINGS}`;
+  },
 };
+const LOOSE_REFERENCE = (two) => `The ${two ? 'photos are' : 'photo is'} only a rough guide to what ${two ? 'these things look' : 'this thing looks'} like, not a template: invent your own composition with your own camera position, distance, framing, light, weather and season, clearly different from the ${two ? 'photos' : 'photo'}, and describe only the essential recognizable features, not every detail of the ${two ? 'photos' : 'photo'}.`;
+const TWO_THINGS =' Both things appear together in one single coherent scene, arranged as the request says, each in its own real proportions; this is one new picture, not two photos side by side.';
 // With the school's own site photo or logo, every picture came out alike: the photo's viewpoint, the logo on
 // white. Each image gets one of these instead (picked from its seed, so images 1..4 differ).
 // Tested one by one (experiment 19): views close to the photo (street level, detail, rooftop) still copied it.
@@ -547,6 +647,12 @@ const QUALITY = {
   hires: null,                // second pass { scale, denoise, steps } on the upscaled latent, or null
   sharpen: 0,                 // ImageSharpen alpha after decoding, 0 = off
   refMegapixels: 0.5,         // size the reference photo is read at
+  // Wikipedia photos as a guide, not a template (experiments 22/23, ~100 images): with the photo in every step the
+  // picture copied its viewpoint, framing, pose and color, and different seeds gave almost the same image. Leaving
+  // the photo out of the first 10 % of the steps frees the layout; from 25 % on details got lost. The loose wording
+  // frees viewpoint, light and color (a blue Vespa from a white one). Not for the school logo and site photos.
+  refRange: [0.1, 1],         // [start, end]: reference photos only in this part of the steps, null = all steps
+  refLoose: true,             // tell the upsampler the photos are only a rough guide (own viewpoint, light, season)
   vary: true,                 // site photo / logo: different viewpoint, color and setting per image (SITE_VIEWS ...)
   freeCaption: false,         // with vary: sample the first caption too; tested, no extra gain, and greedy keeps the cache
   text: {                     // prompt upsampler (TextGenerate)
@@ -579,7 +685,9 @@ function sizeFor(f, megapixels) {
   return { width: r16(f.width), height: r16(f.height) };
 }
 
-function buildWorkflow({ prompt, format, style, variants, advanced, facts, reference, lab, variation, brand }) {
+function buildWorkflow({ prompt, format, style, variants, advanced, facts, references = [], lab, variation, brand }) {
+  const site = references.some((r) => r.site);
+  const reference = references.length ? references[0] : null;
   const f = FORMATS[format] || FORMATS.square;
   const wf = structuredClone(WORKFLOW);
   const adv = cleanAdvanced(advanced);
@@ -591,13 +699,13 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
   const seed = L.seed ?? adv.seed ?? randomSeed();
   // With greedy decoding (top_k 1) the upsampler seed changes nothing, so keep it fixed:
   // ComfyUI then reuses the caption for the same request, e.g. "Nochmal" saves about 8 s.
-  const vary = !!q.vary && !!((reference && reference.site) || brand);
+  const vary = !!q.vary && !!(site || brand);
   const baseText = variation || (vary && q.freeCaption) ? { ...q.text, ...q.variation } : q.text;
   // Extra line for image k: viewpoint for a site photo; color and setting for the logo.
   const hint = (k) => {
     if (!vary) return '';
     let h = '';
-    if (reference && reference.site) h += `\nCamera (unless the request names a viewpoint): the camera stands in a different place than in the photo, ${pick(SITE_VIEWS, seed + k)}. Do not repeat the photo's viewpoint and framing.`;
+    if (site) h += `\nCamera (unless the request names a viewpoint): the camera stands in a different place than in the photo, ${pick(SITE_VIEWS, seed + k)}. Do not repeat the photo's viewpoint and framing.`;
     if (brand) h += `\nUnless the request names colors or a place: the thing carrying the logo is ${pick(LOGO_COLORS, seed + k)}, and the scene is ${pick(LOGO_SETTINGS, seed + 2 * k + 1)}. On a dark color the black words of the logo are printed in white.`;
     return h;
   };
@@ -611,8 +719,8 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
   let negative = ['5', 0];
 
   // Reference images go to the image model (ReferenceMultiLatent) and to the upsampler, which can see images:
-  // a Wikipedia photo of the named thing (node 20) and/or the school logo (node 25).
-  const refs = [...(reference ? [['20', reference.name]] : []), ...(brand ? [['25', brand.name]] : [])];
+  // Wikipedia photos of up to two named things (nodes 20, 26) or a site photo, and/or the school logo (node 25).
+  const refs = [...references.slice(0, 2).map((r, i) => [['20', '26'][i], r.name]), ...(brand ? [['25', brand.name]] : [])];
   const refImages = Object.fromEntries(refs.map(([node], i) => [`images.image${i}`, [node, 0]]));
   if (refs.length) {
     for (const [node, name] of refs) wf[node] = { class_type: 'LoadImage', inputs: { image: name } };
@@ -625,18 +733,36 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
     negative = ['22', 1];
     delete wf['5'];
   }
+  // Reference photos only in part of the sampling steps (refRange [start, end], 0 = first step); in the other
+  // steps the image model sees the text alone. Nodes 27..31.
+  // Not with the logo (must stay exact) or a site photo (own tested viewpoint rules).
+  const range = refs.length && q.refRange && !brand && !site ? q.refRange : null;
+  if (range) {
+    const [a, b] = range;
+    wf['27'] = { class_type: 'ConditioningSetTimestepRange', inputs: { conditioning: ['22', 0], start: a, end: b } };
+    let out = ['27', 0];
+    [[0, a], [b, 1]].filter(([s, e]) => e - s > 0.0001).forEach(([s, e], i) => {
+      const set = String(28 + 2 * i);
+      const join = String(29 + 2 * i);
+      wf[set] = { class_type: 'ConditioningSetTimestepRange', inputs: { conditioning: ['4', 0], start: s, end: e } };
+      wf[join] = { class_type: 'ConditioningCombine', inputs: { conditioning_1: out, conditioning_2: [set, 0] } };
+      out = [join, 0];
+    });
+    positive = out;
+  }
 
-  const refMode = reference ? (adv.upsampler ? (reference.transform && !styleText ? 'transform' : 'faithful') : 'direct') : null;
+  const refMode = reference ? (adv.upsampler ? (references.some((r) => r.transform) && !styleText ? 'transform' : 'faithful') : 'direct') : null;
   let baseRequest = '';
   if (adv.upsampler) {
     let request;
     let system;
     if (refs.length) {
       request = reference
-        ? REFERENCE_REQUEST[refMode](prompt, reference.subject)
+        ? REFERENCE_REQUEST[refMode](prompt, references.slice(0, 2).map((r) => r.subject))
         : `Create a new image for this request (a description of the picture, not text to show): ${prompt}`;
+      if (reference && q.refLoose && !site && !brand) request += `\n${LOOSE_REFERENCE(references.length > 1)}`;
       if (brand) {
-        request += `\nThe ${reference ? 'second' : 'first'} image is the official logo of the Technische Fachschule Bern (TF Bern), a vocational school in Bern, Switzerland: ${LOGO_DESCRIPTION}. Wherever the request means TF Bern, the school, its logo or its branding (for example printed on a T-shirt, a cup or a flag), show exactly this logo, unchanged in shape, colors, lettering and proportions, sharp and readable${vary ? '. The white around the logo in the image is only background, not part of the logo' : ', on a white or light surface'}. Do not invent a different logo.`;
+        request += `\nThe ${ORDINALS[Math.min(references.length, 2)]} image is the official logo of the Technische Fachschule Bern (TF Bern), a vocational school in Bern, Switzerland: ${LOGO_DESCRIPTION}. Wherever the request means TF Bern, the school, its logo or its branding (for example printed on a T-shirt, a cup or a flag), show exactly this logo, unchanged in shape, colors, lettering and proportions, sharp and readable${vary ? '. The white around the logo in the image is only background, not part of the logo' : ', on a white or light surface'}. Do not invent a different logo.`;
       }
       if (styleText) request += `\nStyle: ${styleText}.`;
       request += `\nThe new image is ${ORIENTATION[f.canvas]}.`;
@@ -714,7 +840,7 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
 
   if (separate) {
     // Copy the caption -> encode -> sample -> decode chain for images 2..n, each with a varied caption.
-    const chain = ['11', '4', '6', '7', '8', ...(refs.length ? ['21', '22'] : [])];
+    const chain = ['11', '4', '6', '7', '8', ...(refs.length ? ['21', '22'] : []), ...['27', '28', '29', '30', '31'].filter((n) => wf[n])];
     const decoded = [['8', 0]];
     for (let k = 1; k < variants; k++) {
       const id = (n) => `${n}_${k}`;
@@ -759,9 +885,9 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
       model: wf['1'].inputs.unet_name.replace('.safetensors', ''),
       textEncoder: wf['2'].inputs.clip_name.replace('.safetensors', ''),
       languageModel: adv.upsampler ? WORKFLOW['12'].inputs.clip_name.replace('.safetensors', '') : null,
-      reference: reference ? { mode: refMode, megapixels: q.refMegapixels } : null,
+      reference: reference ? { mode: refMode, megapixels: q.refMegapixels, count: Math.min(references.length, 2), range: range, loose: !!q.refLoose && !site && !brand } : null,
       logo: !!brand,
-      vary: vary ? { view: reference && reference.site ? pick(SITE_VIEWS, seed) : null, color: brand ? pick(LOGO_COLORS, seed) : null } : null,
+      vary: vary ? { view: site ? pick(SITE_VIEWS, seed) : null, color: brand ? pick(LOGO_COLORS, seed) : null } : null,
     },
   };
 }
@@ -810,12 +936,17 @@ async function handleGenerate(req, res) {
   if (!prompt) return sendJson(res, 400, { error: 'Bitte gib eine Beschreibung ein.' });
   const variants = Math.min(settings.maxVariants, [1, 2, 4].includes(Number(body.variants)) ? Number(body.variants) : 1);
 
-  const facts = typeof body.facts === 'string' ? body.facts.trim().slice(0, 1200) : '';
+  const facts = typeof body.facts === 'string' ? body.facts.trim().slice(0, MAX_FACTS) : '';
   // Only photos this server fetched itself are accepted as references.
-  const r = body.reference;
-  let reference = settings.reference && r && typeof r.name === 'string' && knownReference(r.name)
-    ? { name: r.name, subject: String(r.subject || 'the main subject').slice(0, 100), transform: r.transform === true }
-    : null;
+  // Up to two photos (two named things). `reference` is the older single-photo form.
+  const given = Array.isArray(body.references) ? body.references : body.reference ? [body.reference] : [];
+  let references = settings.reference
+    ? given
+      .filter((r) => r && typeof r.name === 'string' && knownReference(r.name))
+      .filter((r, i, all) => all.findIndex((x) => x.name === r.name) === i)
+      .slice(0, 2)
+      .map((r) => ({ name: r.name, subject: String(r.subject || 'the main subject').slice(0, 100), transform: r.transform === true }))
+    : [];
   // School named: the real logo goes along, and for a named site (Felsenau, Lorraine) a photo of the building.
   // A Wikipedia photo about the school itself would compete with them, so drop that one.
   let brand = null;
@@ -823,18 +954,19 @@ async function handleGenerate(req, res) {
   if (BRAND_RE.test(prompt) && !(LAB && body.lab && body.lab.noLogo)) {
     try {
       const known = SITES.find((x) => x.re.test(prompt) && fs.existsSync(x.path));
+      references = references.filter((r) => !/fachschule|tf\s?bern/i.test(r.subject));
       if (known) {
-        reference = { name: await ensureUpload(known.path, `kiosk_site_${known.key}.jpg`, 'image/jpeg'), subject: known.subject, transform: body.transform === true, site: true };
-        site = { name: reference.name, title: known.name, credit: known.credit };
-      } else if (reference && /fachschule|tf\s?bern/i.test(reference.subject)) {
-        reference = null;
+        const photo = { name: await ensureUpload(known.path, `kiosk_site_${known.key}.jpg`, 'image/jpeg'), subject: known.subject, transform: body.transform === true, site: true };
+        // Only the site photo: Wikipedia photos here are mostly of the quarter around it (Lorraine) and pull away from the building.
+        references = [photo];
+        site = { name: photo.name, title: known.name, credit: known.credit };
       }
       if (!known || LOGO_OBJECTS.test(prompt)) brand = { name: await ensureLogo() };
     } catch (e) {
       console.error('logo/standort:', errText(e));
     }
   }
-  const { workflow, info } = buildWorkflow({ prompt, format: body.format, style: body.style, variants, advanced: body.advanced, facts, reference, lab: body.lab, variation: body.variation === true, brand });
+  const { workflow, info } = buildWorkflow({ prompt, format: body.format, style: body.style, variants, advanced: body.advanced, facts, references, lab: body.lab, variation: body.variation === true, brand });
   try {
     const r = await comfyPost('/prompt', {
       prompt: workflow,

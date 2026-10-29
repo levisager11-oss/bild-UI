@@ -1,0 +1,19 @@
+{
+  "name": "22 Wie stark wirken die Referenzfotos? Schrittbereich (refRange) und lockere Formulierung (refLoose)",
+  "seeds": [22101],
+  "prompts": [
+    { "key": "roche-eiger", "prompt": "Die Roche-Türme vor dem Eiger in den Schweizer Alpen", "format": "landscape", "research": true, "reference": true },
+    { "key": "steinbock-kapellbruecke", "prompt": "Ein Steinbock auf der Kapellbrücke", "format": "landscape", "research": true, "reference": true },
+    { "key": "kapellbruecke", "prompt": "Die Kapellbrücke in Luzern", "research": true, "reference": true },
+    { "key": "zytglogge-winter", "prompt": "Der Zytglogge in Bern im Winter", "research": true, "reference": true }
+  ],
+  "variants": [
+    { "key": "jetzt", "lab": { "sampler": "er_sde" } },
+    { "key": "locker", "lab": { "sampler": "er_sde", "refLoose": true } },
+    { "key": "ab10", "lab": { "sampler": "er_sde", "refRange": [0.1, 1] } },
+    { "key": "ab25", "lab": { "sampler": "er_sde", "refRange": [0.25, 1] } },
+    { "key": "bis50", "lab": { "sampler": "er_sde", "refRange": [0, 0.5] } },
+    { "key": "10bis60", "lab": { "sampler": "er_sde", "refRange": [0.1, 0.6] } },
+    { "key": "locker-ab10", "lab": { "sampler": "er_sde", "refLoose": true, "refRange": [0.1, 1] } }
+  ]
+}
