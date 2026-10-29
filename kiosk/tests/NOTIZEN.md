@@ -96,3 +96,10 @@ Rahmen:
 - Foto `reference/standort-lorraine.jpg` (550×363) vom Nutzer abgelegt; Beschreibung in `standorte.json` genauer (Sandsteinbau, rotes Walmdach, Lukarnen, Berner Fahnen, graue Halle mit spitzen Dächern davor).
 - Ohne Foto: erfundene Gebäude, beim Lego-Modell sogar ein Fussballstadion. Mit Foto: richtiges Gebäude in Winter, Nacht und Lego (6/6). Bildausschnitt bleibt nah am Foto.
 - Kontrolle «Das Lorraine-Quartier in Bern im Herbst» (ohne TF Bern): kein Standort-Foto, Bild identisch (aus dem Zwischenspeicher).
+
+### 18–20 Abwechslung bei Standort-Foto und Logo (29.10.)
+- Problem: Mit Standort-Foto immer derselbe Blickwinkel wie das Foto, Logo immer auf weissem T-Shirt/Becher/Fahne (der Auftrag verlangte «on a white or light surface»; Beschreibung ist greedy, also pro Wunsch immer gleich).
+- 18 (5 Wünsche × 3 Seeds × 4 Varianten): pro Bild ein Blickwinkel bzw. Farbe + Umgebung (`vary`) wirkt klar; Logo bleibt korrekt. Zusätzlich freie Beschreibung (`freeCaption`) oder Referenz 0,3 MP: kein weiterer Gewinn → aus.
+- 19 (alle 7 Blickwinkel einzeln): «nah vor dem Eingang», «Detail» und «vom Nachbardach» sahen trotzdem aus wie das Foto → ersetzt. Rot aus den Logo-Farben gestrichen (Logo wurde umgefärbt).
+- 20 (6 Blickwinkel × Lorraine/Felsenau): 12/12 verschieden, Gebäude erkennbar.
+- Netzunterbruch während Test 18 hat den Server abstürzen lassen (Fehlerantwort nach schon gesendetem Bildkopf). Behoben in `proxyHttp`, dazu Sicherheitsnetz für unerwartete Fehler und Neustart-Schleife in `start-kiosk.bat`.

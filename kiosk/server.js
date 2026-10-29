@@ -511,6 +511,29 @@ const REFERENCE_REQUEST = {
   transform: (p, s) => `Create a new image for this request (a description of the picture, not text to show): ${p}\nThe first image is a photo of ${s}, only so you know its real shape and details. Follow the request boldly and creatively: transform, restage and relight ${s} exactly as the request asks. The result may look very different from the photo; only the recognizable design of ${s} is taken from it. The new form asked for must be obvious at first glance, and the surroundings fit the new form, not the photo.`,
   faithful: (p, s) => `Create a new image for this request (a description of the picture, not text to show): ${p}\nThe first image is a photo of ${s}, given only so you know its real shape and details. Do not copy the photo's look, colors, framing, viewpoint or pose. Follow the request boldly: restage, transform and render the whole image fully in the requested style or medium; only the recognizable design of ${s} comes from the photo.`,
 };
+// With the school's own site photo or logo, every picture came out alike: the photo's viewpoint, the logo on
+// white. Each image gets one of these instead (picked from its seed, so images 1..4 differ).
+// Tested one by one (experiment 19): views close to the photo (street level, detail, rooftop) still copied it.
+const SITE_VIEWS = [
+  'a high aerial view from a drone far above, looking down on the roofs and the streets around',
+  'seen from far away across the city, the building small in a wide view with lots of surroundings',
+  'from a corner at a steep angle along one long side, the facade running diagonally into the distance',
+  'a drone view from high above and far to one side, the whole site seen at a slant with its neighbourhood',
+  'seen from the far end of a street, the street leading towards the building at one side of the picture',
+  'seen from a low angle through trees and branches in the foreground',
+];
+// No red: the blue logo got recolored on it, and red is not a school color.
+const LOGO_COLORS = ['white', 'navy blue', 'black', 'light grey', 'dark green', 'yellow', 'beige', 'anthracite grey', 'light blue'];
+const LOGO_SETTINGS = [
+  'outdoors in a sunny park',
+  'in a bright modern workshop with machines',
+  'on a wooden table in a cozy room',
+  'in a city street in Bern',
+  'in a photo studio with a soft colored backdrop',
+  'in a school hallway with students',
+];
+const pick = (list, n) => list[Math.abs(Math.trunc(n)) % list.length];
+
 // Requests that ask for text in the picture (quotes or words like Aufschrift, Schild, Text, sign).
 const WANTS_TEXT = /["«»„“‹›]|aufschrift|aufdruck|beschrift|schrift(?!steller)|schild(?!kr)|text|logo|wort|wörter|buchstab|plakat|sign|label|writing|letters|words?/i;
 const ORIENTATION = { '1:1': 'square', '2:3': 'portrait (taller than wide)', '3:2': 'landscape (wider than tall)' };
@@ -524,6 +547,8 @@ const QUALITY = {
   hires: null,                // second pass { scale, denoise, steps } on the upscaled latent, or null
   sharpen: 0,                 // ImageSharpen alpha after decoding, 0 = off
   refMegapixels: 0.5,         // size the reference photo is read at
+  vary: true,                 // site photo / logo: different viewpoint, color and setting per image (SITE_VIEWS ...)
+  freeCaption: false,         // with vary: sample the first caption too; tested, no extra gain, and greedy keeps the cache
   text: {                     // prompt upsampler (TextGenerate)
     temperature: 1.0, top_k: 1, top_p: 0.95, min_p: 0.0, repetition_penalty: 1.05, presence_penalty: 1.5,
     thinking: false, max_length: 3584,
@@ -566,7 +591,16 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
   const seed = L.seed ?? adv.seed ?? randomSeed();
   // With greedy decoding (top_k 1) the upsampler seed changes nothing, so keep it fixed:
   // ComfyUI then reuses the caption for the same request, e.g. "Nochmal" saves about 8 s.
-  const baseText = variation ? { ...q.text, ...q.variation } : q.text;
+  const vary = !!q.vary && !!((reference && reference.site) || brand);
+  const baseText = variation || (vary && q.freeCaption) ? { ...q.text, ...q.variation } : q.text;
+  // Extra line for image k: viewpoint for a site photo; color and setting for the logo.
+  const hint = (k) => {
+    if (!vary) return '';
+    let h = '';
+    if (reference && reference.site) h += `\nCamera (unless the request names a viewpoint): the camera stands in a different place than in the photo, ${pick(SITE_VIEWS, seed + k)}. Do not repeat the photo's viewpoint and framing.`;
+    if (brand) h += `\nUnless the request names colors or a place: the thing carrying the logo is ${pick(LOGO_COLORS, seed + k)}, and the scene is ${pick(LOGO_SETTINGS, seed + 2 * k + 1)}. On a dark color the black words of the logo are printed in white.`;
+    return h;
+  };
   const textSeed = L.textSeed ?? (baseText.top_k === 1 ? 0 : randomSeed());
   // Several images: each gets its own caption (image 1 as usual, the others as variations), otherwise they look alike.
   const separate = adv.upsampler && variants > 1 && q.scheduler !== 'flux2' && !(q.hires && q.hires.scale > 1) && !L.batch;
@@ -593,6 +627,7 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
   }
 
   const refMode = reference ? (adv.upsampler ? (reference.transform && !styleText ? 'transform' : 'faithful') : 'direct') : null;
+  let baseRequest = '';
   if (adv.upsampler) {
     let request;
     let system;
@@ -601,7 +636,7 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
         ? REFERENCE_REQUEST[refMode](prompt, reference.subject)
         : `Create a new image for this request (a description of the picture, not text to show): ${prompt}`;
       if (brand) {
-        request += `\nThe ${reference ? 'second' : 'first'} image is the official logo of the Technische Fachschule Bern (TF Bern), a vocational school in Bern, Switzerland: ${LOGO_DESCRIPTION}. Wherever the request means TF Bern, the school, its logo or its branding (for example printed on a T-shirt, a cup or a flag), show exactly this logo, unchanged in shape, colors, lettering and proportions, sharp and readable, on a white or light surface. Do not invent a different logo.`;
+        request += `\nThe ${reference ? 'second' : 'first'} image is the official logo of the Technische Fachschule Bern (TF Bern), a vocational school in Bern, Switzerland: ${LOGO_DESCRIPTION}. Wherever the request means TF Bern, the school, its logo or its branding (for example printed on a T-shirt, a cup or a flag), show exactly this logo, unchanged in shape, colors, lettering and proportions, sharp and readable${vary ? '. The white around the logo in the image is only background, not part of the logo' : ', on a white or light surface'}. Do not invent a different logo.`;
       }
       if (styleText) request += `\nStyle: ${styleText}.`;
       request += `\nThe new image is ${ORIENTATION[f.canvas]}.`;
@@ -620,8 +655,9 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
     if (brand) request += '\nApart from this logo, no other lettering, signs or labels.';
     else if (!WANTS_TEXT.test(prompt)) request += '\nNo visible lettering, words, signs or labels anywhere in the picture.';
     const t = baseText;
+    baseRequest = request;
     Object.assign(wf['11'].inputs, {
-      prompt: request,
+      prompt: request + hint(0),
       system_prompt: q.systemExtra ? `${system}\n${q.systemExtra}` : system,
       max_length: t.max_length,
       thinking: !!t.thinking,
@@ -696,6 +732,7 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
         'sampling_mode.min_p': q.variation.min_p,
         'sampling_mode.seed': randomSeed(),
       });
+      if (vary) wf[id('11')].inputs.prompt = baseRequest + hint(k);
       wf[id('7')].inputs.seed = seed + k;
       decoded.push([id('8'), 0]);
     }
@@ -724,6 +761,7 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
       languageModel: adv.upsampler ? WORKFLOW['12'].inputs.clip_name.replace('.safetensors', '') : null,
       reference: reference ? { mode: refMode, megapixels: q.refMegapixels } : null,
       logo: !!brand,
+      vary: vary ? { view: reference && reference.site ? pick(SITE_VIEWS, seed) : null, color: brand ? pick(LOGO_COLORS, seed) : null } : null,
     },
   };
 }
@@ -786,7 +824,7 @@ async function handleGenerate(req, res) {
     try {
       const known = SITES.find((x) => x.re.test(prompt) && fs.existsSync(x.path));
       if (known) {
-        reference = { name: await ensureUpload(known.path, `kiosk_site_${known.key}.jpg`, 'image/jpeg'), subject: known.subject, transform: body.transform === true };
+        reference = { name: await ensureUpload(known.path, `kiosk_site_${known.key}.jpg`, 'image/jpeg'), subject: known.subject, transform: body.transform === true, site: true };
         site = { name: reference.name, title: known.name, credit: known.credit };
       } else if (reference && /fachschule|tf\s?bern/i.test(reference.subject)) {
         reference = null;
@@ -919,9 +957,12 @@ function proxyHttp(req, res) {
     if (up.headers['content-type']) headers['Content-Type'] = up.headers['content-type'];
     if (up.headers['content-length']) headers['Content-Length'] = up.headers['content-length'];
     res.writeHead(up.statusCode, headers);
+    up.on('error', () => res.destroy());
     up.pipe(res);
   });
-  upstream.on('error', () => sendJson(res, 502, { error: 'ComfyUI ist nicht erreichbar.' }));
+  // A network drop in the middle of an image: headers are already out, so just cut the response
+  // (sending an error then crashed the whole server).
+  upstream.on('error', () => (res.headersSent ? res.destroy() : sendJson(res, 502, { error: 'ComfyUI ist nicht erreichbar.' })));
   upstream.end();
 }
 
@@ -984,6 +1025,10 @@ server.on('upgrade', (req, socket, head) => {
   upstream.on('close', close);
   socket.on('close', close);
 });
+
+// Safety net for the open day: log a stray error instead of stopping the kiosk.
+process.on('uncaughtException', (e) => console.error('Unerwarteter Fehler:', e));
+process.on('unhandledRejection', (e) => console.error('Unerwarteter Fehler:', e));
 
 server.listen(PORT, HOST, () => {
   console.log(`Kiosk läuft auf http://localhost:${PORT}  (ComfyUI: ${COMFY_URL.origin})`);

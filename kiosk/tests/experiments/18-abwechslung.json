@@ -1,0 +1,17 @@
+{
+  "name": "18 Abwechslung bei Standort-Foto und Logo: aktuell vs. Blickwinkel/Farbe pro Bild",
+  "seeds": [18101, 18202, 18303],
+  "prompts": [
+    { "key": "lorraine-winter", "prompt": "Der Standort Lorraine der TF Bern im Winter", "format": "landscape", "research": true, "reference": true },
+    { "key": "felsenau-abend", "prompt": "Die TF Bern in der Felsenau bei Sonnenuntergang", "format": "landscape", "research": true, "reference": true },
+    { "key": "tshirt", "prompt": "Ein T-Shirt der TF Bern", "research": true, "reference": true },
+    { "key": "becher", "prompt": "Ein Kaffeebecher mit dem Logo der TF Bern", "research": true, "reference": true },
+    { "key": "fahne-lorraine", "prompt": "Eine Fahne der TF Bern vor dem Standort Lorraine", "format": "landscape", "research": true, "reference": true }
+  ],
+  "variants": [
+    { "key": "aktuell", "lab": {} },
+    { "key": "vary", "lab": { "vary": true } },
+    { "key": "vary-frei", "lab": { "vary": true, "freeCaption": true } },
+    { "key": "vary-ref03", "lab": { "vary": true, "refMegapixels": 0.3 } }
+  ]
+}

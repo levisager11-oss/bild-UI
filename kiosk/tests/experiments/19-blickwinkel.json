@@ -1,0 +1,9 @@
+{
+  "name": "19 Alle Blickwinkel einzeln (Seed % 7 = 0..6) und Logo-Farben",
+  "seeds": [19600, 19601, 19602, 19603, 19604, 19605, 19606],
+  "prompts": [
+    { "key": "lorraine-winter", "prompt": "Der Standort Lorraine der TF Bern im Winter", "format": "landscape", "research": true, "reference": true },
+    { "key": "pulli", "prompt": "Ein Pullover der TF Bern", "research": true, "reference": true }
+  ],
+  "variants": [ { "key": "vary", "lab": {} } ]
+}

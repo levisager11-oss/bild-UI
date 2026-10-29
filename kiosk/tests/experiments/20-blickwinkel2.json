@@ -1,0 +1,9 @@
+{
+  "name": "20 Sechs Blickwinkel (Seed % 6 = 0..5), Lorraine und Felsenau",
+  "seeds": [19800, 19801, 19802, 19803, 19804, 19805],
+  "prompts": [
+    { "key": "lorraine-winter", "prompt": "Der Standort Lorraine der TF Bern im Winter", "format": "landscape", "research": true, "reference": true },
+    { "key": "felsenau-sommer", "prompt": "Der Standort Felsenau der TF Bern im Sommer", "format": "landscape", "research": true, "reference": true }
+  ],
+  "variants": [ { "key": "vary", "lab": {} } ]
+}

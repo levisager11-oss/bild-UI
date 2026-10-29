@@ -82,6 +82,7 @@ Nennt ein Wunsch «TF Bern», «TFBern» oder «Technische Fachschule», bekommt
   - Felsenau: Foto von Urs Schönholzer, CC BY 4.0, Wikimedia Commons.
   - Lorraine: Foto der Technischen Fachschule Bern (Lorrainestrasse 3, mit der Halle davor).
   - Weitere Standorte: Foto in `reference/` ablegen, Eintrag in `standorte.json` ergänzen, Server neu starten.
+- **Abwechslung:** Sonst sähe jedes Bild aus wie das Foto bzw. das Logo immer auf Weiss. Darum bekommt jedes Bild einen eigenen Blickwinkel (`SITE_VIEWS`: Drohne, von weit weg, schräg, durch Bäume …) und für das Logo eine eigene Farbe und Umgebung (`LOGO_COLORS`, `LOGO_SETTINGS`). Nennt der Wunsch selbst Farbe, Ort oder Blickwinkel, gilt der Wunsch. Ausschalten: `vary: false` in `QUALITY`.
 
 Wünsche ohne TF Bern bleiben unverändert (getestet: identischer Auftrag).
 
