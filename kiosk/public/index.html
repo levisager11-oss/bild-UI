@@ -85,6 +85,9 @@
       <figure class="canvas" id="canvas" hidden>
         <div class="frame" id="frame">
           <img id="image" alt="Von der KI erstelltes Bild">
+          <button class="zoom-btn" id="zoomBtn" type="button" aria-label="Bild vergrössern" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6M10 7v6M7 10h6"/></svg>
+          </button>
           <div class="grid" id="grid" hidden></div>
           <div class="overlay-box tf-spickel" id="caption" hidden>
             <p class="overlay-title">So hat die KI deinen Wunsch beschrieben</p>
@@ -124,6 +127,20 @@
       </div>
     </section>
   </main>
+
+  <!-- Zoom: full screen view of the result -->
+  <div class="zoom" id="zoom" hidden role="dialog" aria-modal="true" aria-label="Bild vergrössert">
+    <div class="zoom-stage" id="zoomStage"><img id="zoomImg" alt="Von der KI erstelltes Bild, vergrössert" draggable="false"></div>
+    <div class="zoom-bar">
+      <p class="zoom-hint">Mit zwei Fingern zoomen, mit einem Finger verschieben, doppelt tippen zum Vergrössern.</p>
+      <div class="zoom-buttons">
+        <button class="btn btn-inverse" id="zoomOut" type="button" aria-label="Verkleinern">−</button>
+        <button class="btn btn-inverse" id="zoomIn" type="button" aria-label="Vergrössern">+</button>
+        <button class="btn btn-inverse" id="zoomFit" type="button">Ganzes Bild</button>
+        <button class="btn btn-primary" id="zoomClose" type="button">Schliessen</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Inactivity -->
   <div class="idle-overlay" id="idle" hidden>

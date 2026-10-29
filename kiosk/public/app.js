@@ -42,6 +42,8 @@
     proSeed: $('proSeed'), proSeedDice: $('proSeedDice'), proSampler: $('proSampler'),
     proUpsampler: $('proUpsampler'), proResearch: $('proResearch'), proResearchRow: $('proResearchRow'), proReset: $('proReset'),
     proReference: $('proReference'), proReferenceRow: $('proReferenceRow'),
+    zoom: $('zoom'), zoomStage: $('zoomStage'), zoomImg: $('zoomImg'), zoomBtn: $('zoomBtn'),
+    zoomIn: $('zoomIn'), zoomOut: $('zoomOut'), zoomFit: $('zoomFit'), zoomClose: $('zoomClose'),
     aResearch: $('aResearch'), aReference: $('aReference'), aQuality: $('aQuality'),
     admin: $('admin'), adminStatus: $('adminStatus'), adminMsg: $('adminMsg'), adminSave: $('adminSave'),
     adminSaver: $('adminSaver'), adminReload: $('adminReload'),
@@ -211,6 +213,8 @@
     applySettings();
     if (next !== 'result') closeOverlays();
     if (next !== 'generating') stopFacts();
+    if (next !== 'result') closeZoom();
+    updateZoomBtn();
     requestAnimationFrame(fitFrame);
   }
 
@@ -254,6 +258,7 @@
     el.tech.hidden = true;
     el.showCaption.setAttribute('aria-pressed', 'false');
     el.showTech.setAttribute('aria-pressed', 'false');
+    updateZoomBtn();
   }
 
   function toggleOverlay(which) {
@@ -264,6 +269,7 @@
     if (which === 'tech') renderTech();
     box.hidden = false;
     (which === 'caption' ? el.showCaption : el.showTech).setAttribute('aria-pressed', 'true');
+    updateZoomBtn();
   }
 
   function setProgress(label, detail, fraction, activePhase) {
@@ -525,6 +531,7 @@
     el.grid.hidden = false;
     el.showAll.hidden = true;
     closeOverlays();
+    updateZoomBtn();
     requestAnimationFrame(fitFrame);
   }
 
@@ -533,6 +540,7 @@
     setImage(job.images[i]);
     el.grid.hidden = true;
     el.showAll.hidden = false;
+    updateZoomBtn();
     requestAnimationFrame(fitFrame);
   }
 
@@ -860,6 +868,7 @@
   }
 
   function resetAll() {
+    closeZoom();
     if (job && !job.done) cancelJob();
     job = null;
     el.prompt.value = '';
@@ -1073,6 +1082,151 @@
   document.querySelectorAll('.modal [data-close]').forEach((b) => b.addEventListener('click', () => closeModal(b.closest('.modal'))));
   document.querySelectorAll('.modal').forEach((m) => m.addEventListener('pointerdown', (e) => { if (e.target === m) closeModal(m); }));
 
+  // ---------- Zoom ----------
+  // Full screen view of the result: two fingers to zoom, one finger to move, double tap or +/- to zoom.
+  const zoom = { scale: 1, fit: 1, x: 0, y: 0, w: 0, h: 0 };
+  const pointers = new Map(); // pointerId -> [x, y] inside the stage
+  let pinch = null;           // { dist, scale, mx, my } at the start of a two-finger gesture
+  let lastTap = 0;
+  let lastTapPos = null;
+  let moved = false;
+
+  function updateZoomBtn() {
+    el.zoomBtn.hidden = !(state === 'result' && el.grid.hidden && el.caption.hidden && el.tech.hidden);
+  }
+
+  function openZoom() {
+    if (state !== 'result' || !el.grid.hidden || !el.image.src) return;
+    el.zoomImg.onload = () => {
+      zoom.w = el.zoomImg.naturalWidth;
+      zoom.h = el.zoomImg.naturalHeight;
+      fitZoom(false);
+    };
+    el.zoom.hidden = false;
+    el.zoomImg.src = el.image.src;
+    if (el.zoomImg.complete && el.zoomImg.naturalWidth) el.zoomImg.onload();
+  }
+
+  function closeZoom() {
+    el.zoom.hidden = true;
+    pointers.clear();
+    pinch = null;
+  }
+
+  const stageRect = () => el.zoomStage.getBoundingClientRect();
+  const maxScale = () => Math.max(zoom.fit * 6, 3);
+
+  function applyZoom(animate) {
+    const r = stageRect();
+    const sw = zoom.w * zoom.scale;
+    const sh = zoom.h * zoom.scale;
+    // Keep the picture on screen: centred while smaller than the screen, edges never pulled inwards.
+    zoom.x = sw <= r.width ? (r.width - sw) / 2 : Math.min(0, Math.max(r.width - sw, zoom.x));
+    zoom.y = sh <= r.height ? (r.height - sh) / 2 : Math.min(0, Math.max(r.height - sh, zoom.y));
+    el.zoomImg.classList.toggle('is-animated', !!animate);
+    el.zoomImg.style.width = zoom.w + 'px';
+    el.zoomImg.style.height = zoom.h + 'px';
+    el.zoomImg.style.transform = `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})`;
+  }
+
+  function fitZoom(animate) {
+    if (!zoom.w) return;
+    const r = stageRect();
+    zoom.fit = Math.min(r.width / zoom.w, r.height / zoom.h);
+    zoom.scale = zoom.fit;
+    applyZoom(animate);
+  }
+
+  // New scale, keeping the stage point (px, py) under the finger or cursor.
+  function zoomAt(newScale, px, py, animate) {
+    const s = Math.min(maxScale(), Math.max(zoom.fit, newScale));
+    zoom.x = px - ((px - zoom.x) * s) / zoom.scale;
+    zoom.y = py - ((py - zoom.y) * s) / zoom.scale;
+    zoom.scale = s;
+    applyZoom(animate);
+  }
+
+  function zoomCenter(factor) {
+    const r = stageRect();
+    zoomAt(zoom.scale * factor, r.width / 2, r.height / 2, true);
+  }
+
+  function stagePoint(e) {
+    const r = stageRect();
+    return [e.clientX - r.left, e.clientY - r.top];
+  }
+
+  el.zoomStage.addEventListener('pointerdown', (e) => {
+    try { el.zoomStage.setPointerCapture(e.pointerId); } catch {}
+    pointers.set(e.pointerId, stagePoint(e));
+    moved = false;
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinch = { dist: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, scale: zoom.scale, mx: (a[0] + b[0]) / 2, my: (a[1] + b[1]) / 2 };
+    }
+    el.zoomStage.classList.add('is-dragging');
+  });
+
+  el.zoomStage.addEventListener('pointermove', (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    const prev = pointers.get(e.pointerId);
+    const cur = stagePoint(e);
+    pointers.set(e.pointerId, cur);
+    if (pointers.size === 2 && pinch) {
+      const [a, b] = [...pointers.values()];
+      const mx = (a[0] + b[0]) / 2;
+      const my = (a[1] + b[1]) / 2;
+      // Move with the midpoint of both fingers, scale with their distance.
+      zoom.x += mx - pinch.mx;
+      zoom.y += my - pinch.my;
+      pinch.mx = mx;
+      pinch.my = my;
+      zoomAt((pinch.scale * Math.hypot(a[0] - b[0], a[1] - b[1])) / pinch.dist, mx, my, false);
+      moved = true;
+    } else if (pointers.size === 1) {
+      const dx = cur[0] - prev[0];
+      const dy = cur[1] - prev[1];
+      if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
+      zoom.x += dx;
+      zoom.y += dy;
+      applyZoom(false);
+    }
+  });
+
+  function endPointer(e) {
+    if (!pointers.has(e.pointerId)) return;
+    const pos = pointers.get(e.pointerId);
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinch = null;
+    if (pointers.size === 0) el.zoomStage.classList.remove('is-dragging');
+    if (e.type !== 'pointerup' || moved || pointers.size) return;
+    // Double tap: zoom in at that point, or back to the whole picture.
+    const now = Date.now();
+    if (now - lastTap < 350 && lastTapPos && Math.hypot(pos[0] - lastTapPos[0], pos[1] - lastTapPos[1]) < 40) {
+      if (zoom.scale > zoom.fit * 1.05) fitZoom(true);
+      else zoomAt(zoom.fit * 2.5, pos[0], pos[1], true);
+      lastTap = 0;
+    } else {
+      lastTap = now;
+      lastTapPos = pos;
+    }
+  }
+  el.zoomStage.addEventListener('pointerup', endPointer);
+  el.zoomStage.addEventListener('pointercancel', endPointer);
+  el.zoomStage.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const [px, py] = stagePoint(e);
+    zoomAt(zoom.scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15), px, py, false);
+  }, { passive: false });
+  window.addEventListener('resize', () => { if (!el.zoom.hidden) fitZoom(false); });
+
+  el.image.addEventListener('click', openZoom);
+  el.zoomBtn.addEventListener('click', openZoom);
+  el.zoomIn.addEventListener('click', () => zoomCenter(1.6));
+  el.zoomOut.addEventListener('click', () => zoomCenter(1 / 1.6));
+  el.zoomFit.addEventListener('click', () => fitZoom(true));
+  el.zoomClose.addEventListener('click', closeZoom);
+
   // ---------- Events ----------
   ['pointerdown', 'keydown', 'input', 'wheel'].forEach((t) => document.addEventListener(t, bumpActivity, { capture: true, passive: true }));
   el.idle.addEventListener('pointerdown', (e) => { e.preventDefault(); bumpActivity(); });
@@ -1093,6 +1247,7 @@
     }
     if (e.key === 'Escape') {
       if (saverOn) stopScreensaver();
+      closeZoom();
       document.querySelectorAll('.modal').forEach(closeModal);
     }
   });
