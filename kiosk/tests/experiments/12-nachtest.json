@@ -1,0 +1,14 @@
+{
+  "name": "12 Nachtest: keine Titel aus dem Wunsch, keine Lichtshow aus der Recherche",
+  "seeds": [12101, 12202],
+  "prompts": [
+    { "key": "bundeshaus-nacht", "prompt": "Das Bundeshaus in Bern bei Nacht ", "research": true, "reference": true },
+    { "key": "bundeshaus-comic", "prompt": "Das Bundeshaus mit tanzenden Bären ", "style": "comic", "research": true, "reference": true },
+    { "key": "rennwagen-comic", "prompt": "Ein selbstgebauter Rennwagen", "style": "comic" },
+    { "key": "pinguin-comic", "prompt": "Ein Pinguin als Koch in einer grossen Küche", "style": "comic" },
+    { "key": "schild", "prompt": "Ein Holzschild mit der Aufschrift «Tag der offenen Tür» vor einer Werkstatt" }
+  ],
+  "variants": [
+    { "key": "neu", "lab": {} }
+  ]
+}

@@ -73,6 +73,34 @@ Getestete Regeln (Okt. 2026, rund 60 Vergleichsbilder mit gleichem Seed):
 
 Ein- und ausschalten im Betreuer-Menü («Referenzfotos von Wikipedia») und in den Profi-Einstellungen («Referenzfoto»). Braucht ask für den Prüf-Schritt.
 
+## Bildqualität (Testnacht 28./29. Oktober 2026)
+
+Rund 550 Testbilder, Einzelheiten in `tests/NOTIZEN.md`. Die Werte stehen im `QUALITY`-Block in `server.js`.
+
+| Einstellung | Wert | Warum |
+| --- | --- | --- |
+| Sampler | `er_sde`, Scheduler `simple`, 16 Schritte | sichtbar mehr echtes Detail als `euler`; mehr Schritte oder Flux2Scheduler brachten nichts |
+| Auflösung | Stufe «maximal»: 1 Bild 2 MP, 2 Bilder 1,5 MP, 4 Bilder 1 MP | native 2 MP = natürlichste Gesichter, feinste Details; Verfeinerungs-Durchgang und Nachschärfen waren schlechter |
+| Prompt-Verbesserer | greedy (top_k 1), Thinking aus | Sampling brachte ungewollte Schrift; Thinking lieferte leere Beschreibungen |
+| «Nochmal», Bild 2–4 | neue Beschreibung mit temperature 0,7 / top_k 40 | gleiche Beschreibung + neuer Seed ergibt fast gleiche Bilder |
+| Schrift | Zusatzregel + «keine Schrift» im Wunsch, wenn dieser keinen Text verlangt | sonst erfundene Schilder, Kreidetafeln und Titel mit verwaschener Schrift |
+| Stile | ausführliche Stil-Texte | gewannen bei 7 von 8 Stilen deutlich |
+
+Zeiten (GPU): 1 Bild ≈ 25 s, mit Recherche und Foto ≈ 33 s, «Nochmal» ≈ 28 s, 2 Bilder ≈ 40 s, 4 Bilder ≈ 60 s. Im Betreuer-Menü lässt sich die Stufe auf «hoch» oder «schnell» senken.
+
+Grenzen: «Explosionszeichnung» wird als echte Explosion gemalt; Mundart wird verstanden, aber nicht immer genau umgesetzt; Wörter wie «hobeln» kennt das Modell nicht sicher.
+
+## Testen
+
+```bash
+KIOSK_LAB=1 PORT=8090 node --use-system-ca server.js
+node tests/bench.js tests/experiments/01-sampler.json <Ausgabeordner>
+python -I tests/sheet.py <Ausgabeordner> uebersicht.jpg
+node tests/plan-check.js
+```
+
+Im Labor-Modus darf eine Anfrage mit `lab` alle Werte aus `QUALITY` überschreiben. `plan-check.js` prüft den Prüf-Schritt von ask an 40 Beispielen.
+
 ## Betreuer-Menü
 
 **Strg+Alt+B** auf einer angeschlossenen Tastatur. Zeigt den Status (ComfyUI, Grafikkarte, Warteschlange) und erlaubt:

@@ -1,0 +1,110 @@
+{
+  "name": "14 Beispielbilder für den Bildschirmschoner (beste Einstellungen)",
+  "seeds": [
+    1414
+  ],
+  "prompts": [
+    {
+      "key": "beispiel-01",
+      "prompt": "Ein Roboter, der in einer Werkstatt ein Velo repariert",
+      "format": "landscape",
+      "style": null,
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "beispiel-02",
+      "prompt": "Der Zytglogge in Bern als Raumschiff kurz vor dem Start",
+      "format": "landscape",
+      "style": null,
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "beispiel-03",
+      "prompt": "Eine Katze mit Schweisshelm, die eine Metallskulptur schweisst",
+      "format": "landscape",
+      "style": null,
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "beispiel-04",
+      "prompt": "Ein Bär, der in einem Büro in Bern am Laptop programmiert",
+      "format": "landscape",
+      "style": "comic",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "beispiel-05",
+      "prompt": "Eine Stadt der Zukunft mit Solardächern und Seilbahnen",
+      "format": "landscape",
+      "style": null,
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "beispiel-06",
+      "prompt": "Ein Drache aus Zahnrädern fliegt über die Aare",
+      "format": "landscape",
+      "style": "oel",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "beispiel-07",
+      "prompt": "Ein Astronaut grilliert Würste auf dem Mond",
+      "format": "landscape",
+      "style": null,
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "beispiel-08",
+      "prompt": "Ein Zug aus Spielzeugbausteinen fährt durch die Alpen",
+      "format": "landscape",
+      "style": "bausteine",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "beispiel-09",
+      "prompt": "Eine Leiterplatte, die von oben wie eine Stadt aussieht",
+      "format": "landscape",
+      "style": null,
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "beispiel-10",
+      "prompt": "Ein Wasserkraftwerk in den Bergen",
+      "format": "landscape",
+      "style": "aquarell",
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "beispiel-11",
+      "prompt": "Ein Fuchs mit Schutzbrille an einer Drehbank",
+      "format": "landscape",
+      "style": null,
+      "research": true,
+      "reference": true
+    },
+    {
+      "key": "beispiel-12",
+      "prompt": "Eine gemütliche Schreinerei im Morgenlicht",
+      "format": "landscape",
+      "style": "render",
+      "research": true,
+      "reference": true
+    }
+  ],
+  "variants": [
+    {
+      "key": "best",
+      "lab": {}
+    }
+  ]
+}

@@ -63,6 +63,26 @@ Rahmen:
 - «Hund»: Hund auf einer «Kiosk-Theke» → Ursache: Zusatzregel begann mit «Kiosk rule:» → umformuliert («Additional rule:»).
 - «Explosionszeichnung eines Elektromotors»: als echte Explosion mit Feuer gedeutet (Sprachproblem des Upsamplers) → im Bericht erwähnen.
 
+### 07 Echte Motive ohne vs. mit Recherche + Referenzfoto (60 Bilder, 2 MP)
+- Foto bei 14/15 Motiven gefunden (Murmeltier gilt als alltäglich). Sehr grosse Gewinne: Berner Münster (ohne: 2 Türme, falsch → mit: echter 1 Turm), Kapellbrücke (echter Wasserturm), Schloss Chillon (echte Inselburg), Steinbock (ohne: weisse Ziege), Re 460 (echte Lokform statt Fantasie mit Aufschrift), Landwasserviadukt (echter Bogen + Tunnel + roter Zug), Rotmilan (ohne: roter Papagei!), Taschenmesser-Raumschiff, Kapellbrücke als Aquarell.
+- Probleme: Bundeshaus bei Nacht mit bunter Lichtshow (aus den Recherche-Fakten über «Rendez-vous Bundesplatz»); Comic-Bundeshaus mit dem Wunsch als grossem Titel im Bild.
+- Fixes: SUMMARY_PROMPT «nur dauerhaftes Aussehen, keine Shows/Events/Dekorationen»; Zusatzregel «keine Titel, nie den Wunsch selbst ins Bild schreiben»; Referenz-Anfrage «(a description of the picture, not text to show)».
+
+### 12 Nachtest (10+10 Bilder)
+- Bundeshaus bei Nacht: keine Lichtshow mehr. Comic-Bundeshaus: kein Titel mehr. Comics ohne Fantasie-Schrift. Schild-Text weiterhin korrekt.
+
+### 05 Alle 20 Prompt-Ideen + 8 Würfel-Sätze (28 Bilder, 2 MP)
+- Alle gut; Prüf-Schritt sucht bei Ideen korrekt kein Foto, ausser Zytglogge (→ Raumschiff mit Referenz hervorragend).
+- «Igel hobelt ein Brett» → Igel sägt (Wort «hobeln» unbekannt) → Würfel-Baustein ersetzt durch «baut ein Vogelhaus».
+- «Katze kocht Fondue in einer Schreinerei»: Schild «SCHREINEREI» trotz Regel (3/3 Seeds).
+
+### 13 Fantasie-Schilder (Nachtest)
+- Regel nur im Systemprompt reicht nicht für Ladenschilder. Neu: Wenn der Wunsch keinen Text verlangt (Muster WANTS_TEXT: Anführungszeichen, Aufschrift, Aufdruck, Schild ≠ Schildkröte, Text, Plakat, sign …), hängt der Server «No visible lettering, words, signs or labels anywhere in the picture.» an den Wunsch.
+- Ergebnis: SCHREINEREI-Schild weg (3/3), Bäckerei/Markt ohne Schrift, «Tag der offenen Tür» weiterhin korrekt.
+
+### 08 Formate und 4 Bilder (6 Aufträge)
+- Hoch 1200×1744, Quer 1744×1200 (2 MP) je ≈ 22 s; Bausteine- und 3D-Stil gut. 4 Bilder (1 MP) ≈ 59 s, alle verschieden.
+
 ## Stand bei Abbruch (Nutzungslimit, ca. 00:45)
 - Übernommen in server.js/app.js: er_sde, Qualitätsstufen (maximal = 2 MP bei 1 Bild), neue STYLES, Regel gegen Fantasie-Schrift, echte Varianten («Nochmal» + eigene Beschreibung pro Bild), besserer ask-Prüf-Schritt, ask-Zwischenspeicher.
 - Läuft noch im Hintergrund (Ergebnisse im Scratchpad, nicht ausgewertet): 07 echte Motive mit/ohne Recherche+Foto, 05 alle Prompt-Ideen, 08 Formate/4 Varianten.

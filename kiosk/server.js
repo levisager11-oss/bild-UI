@@ -204,10 +204,12 @@ Reply with JSON only:
 
 const SEARCH_PROMPT = `Research the visual appearance of the specific real-world things in an image request. Use the web search.
 Then reply with JSON only: {"facts": "3 to 6 short English sentences with visual facts only: shape, colors, materials, size, typical surroundings, distinctive details", "sources": [{"title": "page title", "url": "https://..."}]}.
+Describe the lasting appearance only, no special events, light shows or temporary decorations unless the request asks for them.
 No opinions, no history that cannot be seen, no text or labels to render.`;
 
 const SUMMARY_PROMPT = `You get an image request and text from web pages found for it. Extract what the specific real-world things look like, using only the web page text.
 Reply with JSON only: {"facts": "3 to 6 short English sentences with visual facts only: shape, colors, materials, size, typical surroundings, distinctive details"}.
+Describe the lasting appearance only: leave out special events, light shows, festivals, temporary decorations, construction work and seasonal markets, unless the request asks for them.
 No opinions, no history that cannot be seen, no text or labels to render. If the pages say nothing useful about the appearance, reply {"facts": ""}.`;
 
 // Rough HTML to text: drop scripts, styles and navigation, keep paragraph text.
@@ -470,9 +472,11 @@ const randomSeed = () => crypto.randomInt(0, 2 ** 48 - 1);
 // "transform" works best when the thing becomes something else, "faithful" for styles and plain depictions
 // (otherwise the photo's look, framing and pose get copied and a chosen style gets lost).
 const REFERENCE_REQUEST = {
-  transform: (p, s) => `Create a new image for this request: ${p}\nThe first image is a photo of ${s}, only so you know its real shape and details. Follow the request boldly and creatively: transform, restage and relight ${s} exactly as the request asks. The result may look very different from the photo; only the recognizable design of ${s} is taken from it. The new form asked for must be obvious at first glance, and the surroundings fit the new form, not the photo.`,
-  faithful: (p, s) => `Create a new image for this request: ${p}\nThe first image is a photo of ${s}, given only so you know its real shape and details. Do not copy the photo's look, colors, framing, viewpoint or pose. Follow the request boldly: restage, transform and render the whole image fully in the requested style or medium; only the recognizable design of ${s} comes from the photo.`,
+  transform: (p, s) => `Create a new image for this request (a description of the picture, not text to show): ${p}\nThe first image is a photo of ${s}, only so you know its real shape and details. Follow the request boldly and creatively: transform, restage and relight ${s} exactly as the request asks. The result may look very different from the photo; only the recognizable design of ${s} is taken from it. The new form asked for must be obvious at first glance, and the surroundings fit the new form, not the photo.`,
+  faithful: (p, s) => `Create a new image for this request (a description of the picture, not text to show): ${p}\nThe first image is a photo of ${s}, given only so you know its real shape and details. Do not copy the photo's look, colors, framing, viewpoint or pose. Follow the request boldly: restage, transform and render the whole image fully in the requested style or medium; only the recognizable design of ${s} comes from the photo.`,
 };
+// Requests that ask for text in the picture (quotes or words like Aufschrift, Schild, Text, sign).
+const WANTS_TEXT = /["«»„“‹›]|aufschrift|aufdruck|beschrift|schrift(?!steller)|schild(?!kr)|text|logo|wort|wörter|buchstab|plakat|sign|label|writing|letters|words?/i;
 const ORIENTATION = { '1:1': 'square', '2:3': 'portrait (taller than wide)', '3:2': 'landscape (wider than tall)' };
 
 // Quality settings for every image. Values found in the test night of 2026-10-28/29 (see TESTBERICHT).
@@ -488,13 +492,13 @@ const QUALITY = {
     temperature: 1.0, top_k: 1, top_p: 0.95, min_p: 0.0, repetition_penalty: 1.05, presence_penalty: 1.5,
     thinking: false, max_length: 3584,
   },
-  // Appended to the upsampler system prompt. Without it the upsampler often invents signs, chalkboards
-  // and labels whose lettering comes out garbled (tested); requested text still works.
-  // Do not mention the kiosk here: an earlier wording put a kiosk counter into a dog picture.
   // Upsampler sampling for variations ("Nochmal" and image 2..4): greedy gives the same caption every time,
   // and with the same caption new seeds only make near-identical images (tested).
   variation: { temperature: 0.7, top_k: 40, top_p: 0.9, min_p: 0.05 },
-  systemExtra: 'Additional rule: add no signs, labels, logos, brand names or written words of your own. Only when the request itself asks for text, render exactly that text.',
+  // Appended to the upsampler system prompt. Without it the upsampler often invents signs, chalkboards
+  // and labels whose lettering comes out garbled, and comic pictures got the request as a title (tested);
+  // requested text still works. Do not mention the kiosk here: that put a kiosk counter into a dog picture.
+  systemExtra: 'Additional rule: add no signs, labels, logos, titles, brand names or written words of your own, and never write the request itself into the image as a title or caption. Only when the request explicitly asks for text (e.g. a sign with certain words), render exactly that text.',
 };
 const LAB = process.env.KIOSK_LAB === '1';
 
@@ -568,6 +572,8 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
       if (factText) request += `\n${factText}`;
       system = SYSTEM_PROMPT;
     }
+    // The system rule alone did not stop shop signs like "SCHREINEREI" (tested); said in the request it works.
+    if (!WANTS_TEXT.test(prompt)) request += '\nNo visible lettering, words, signs or labels anywhere in the picture.';
     const t = baseText;
     Object.assign(wf['11'].inputs, {
       prompt: request,

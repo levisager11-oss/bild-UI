@@ -31,7 +31,7 @@ window.DICE = {
   what: [
     'repariert ein Velo', 'schweisst eine Skulptur', 'lötet eine Leiterplatte', 'baut ein Baumhaus',
     'kocht Fondue', 'fährt Snowboard', 'malt ein Bild', 'spielt Schach', 'fliegt einen Heissluftballon',
-    'programmiert einen Roboter', 'montiert Solarpanels', 'hobelt ein Brett',
+    'programmiert einen Roboter', 'montiert Solarpanels', 'baut ein Vogelhaus',
   ],
   where: [
     'auf dem Bundesplatz in Bern', 'in einer Schreinerei', 'auf dem Mond', 'unter Wasser',

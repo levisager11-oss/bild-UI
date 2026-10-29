@@ -1,0 +1,34 @@
+{
+  "name": "13 Nachtest Fantasie-Schild mit aktueller Regel",
+  "seeds": [
+    13101,
+    13202,
+    13303
+  ],
+  "prompts": [
+    {
+      "key": "katze-fondue",
+      "prompt": "Eine Katze kocht Fondue in einer Schreinerei"
+    },
+    {
+      "key": "baeckerei",
+      "prompt": "Eine gemütliche Bäckerei am Morgen"
+    },
+    {
+      "key": "schild",
+      "prompt": "Ein Holzschild mit der Aufschrift «Tag der offenen Tür» vor einer Werkstatt"
+    },
+    {
+      "key": "markt",
+      "prompt": "Ein Wochenmarkt auf dem Bundesplatz mit Gemüseständen"
+    }
+  ],
+  "variants": [
+    {
+      "key": "neu",
+      "lab": {
+        "megapixels": 1
+      }
+    }
+  ]
+}
