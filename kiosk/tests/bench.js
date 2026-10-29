@@ -108,6 +108,7 @@ function gpuSeconds(h) {
           lab,
           advanced: { steps: lab.steps || 16, sampler: lab.sampler || 'euler', upsampler: v.upsampler !== false, ...(v.advanced || {}) },
           variation: !!(v.variation || p.variation),
+          transform: !!(prep.plan && prep.plan.transform),
           facts: v.noFacts ? null : prep.facts || null,
           reference: v.noReference ? null : prep.reference || null,
         };

@@ -73,6 +73,17 @@ Getestete Regeln (Okt. 2026, rund 60 Vergleichsbilder mit gleichem Seed):
 
 Ein- und ausschalten im Betreuer-Menü («Referenzfotos von Wikipedia») und in den Profi-Einstellungen («Referenzfoto»). Braucht ask für den Prüf-Schritt.
 
+## Logo und Standorte der TF Bern
+
+Nennt ein Wunsch «TF Bern», «TFBern» oder «Technische Fachschule», bekommt das Bildmodell echte Vorlagen mit, sonst nichts:
+
+- **Logo** (`reference/tfbern-logo.png`): Die KI übernimmt das echte Logo auf T-Shirt, Becher, Fahne usw. Ohne Vorlage erfand sie rote Fantasie-Logos.
+- **Standorte** (`reference/standorte.json`): Nennt der Wunsch zusätzlich «Felsenau» oder «Lorraine», kommt ein Foto des Gebäudes mit. Das Logo kommt dann nur dazu, wenn ein Gegenstand wie Fahne, T-Shirt oder Bus vorkommt.
+  - Felsenau: Foto von Urs Schönholzer, CC BY 4.0, Wikimedia Commons.
+  - **Lorraine: Foto fehlt noch.** Ein eigenes Foto des Gebäudes an der Lorrainestrasse 3 als `reference/standort-lorraine.jpg` ablegen, Server neu starten, fertig. Weitere Standorte gehen gleich über `standorte.json`.
+
+Wünsche ohne TF Bern bleiben unverändert (getestet: identischer Auftrag).
+
 ## Bildqualität (Testnacht 28./29. Oktober 2026)
 
 Rund 550 Testbilder, Einzelheiten in `tests/NOTIZEN.md`. Die Werte stehen im `QUALITY`-Block in `server.js`.

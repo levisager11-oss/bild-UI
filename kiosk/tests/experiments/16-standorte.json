@@ -1,0 +1,16 @@
+{
+  "name": "16 TF-Bern-Standorte: ohne vs. mit Standort-Foto (und Kontrollen ohne TF Bern)",
+  "seeds": [16101, 16202],
+  "prompts": [
+    { "key": "felsenau-winter", "prompt": "Der Standort Felsenau der TF Bern im Winter", "format": "landscape", "research": true, "reference": true },
+    { "key": "felsenau-abend", "prompt": "Die TF Bern in der Felsenau bei Sonnenuntergang", "format": "landscape", "research": true, "reference": true },
+    { "key": "felsenau-raumschiff", "prompt": "Die TF Bern Felsenau als Raumschiff", "research": true, "reference": true },
+    { "key": "felsenau-fahne", "prompt": "Eine Fahne der TF Bern vor dem Standort Felsenau", "format": "landscape", "research": true, "reference": true },
+    { "key": "kontrolle-roboter", "prompt": "Ein Roboter repariert in einer Werkstatt ein Velo", "research": true, "reference": true },
+    { "key": "kontrolle-felsenau", "prompt": "Die Felsenau in Bern mit der Aare", "format": "landscape", "research": true, "reference": true }
+  ],
+  "variants": [
+    { "key": "ohne", "lab": { "noLogo": true } },
+    { "key": "mit", "lab": {} }
+  ]
+}

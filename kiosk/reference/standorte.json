@@ -1,0 +1,18 @@
+[
+  {
+    "key": "felsenau",
+    "name": "Standort Felsenau",
+    "match": "felsenau",
+    "file": "standort-felsenau.jpg",
+    "subject": "the Felsenau site of the Technische Fachschule Bern (Gewerbepark Felsenau, a former spinning mill at Felsenaustrasse 17 in Bern, with two small towers and saw-tooth workshop roofs)",
+    "credit": "Foto: Urs Schönholzer, CC BY 4.0, Wikimedia Commons"
+  },
+  {
+    "key": "lorraine",
+    "name": "Standort Lorraine",
+    "match": "lorraine",
+    "file": "standort-lorraine.jpg",
+    "subject": "the main building of the Technische Fachschule Bern at Lorrainestrasse 3 in the Lorraine quarter of Bern",
+    "credit": "Foto: Technische Fachschule Bern"
+  }
+]

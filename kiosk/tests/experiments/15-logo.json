@@ -1,0 +1,15 @@
+{
+  "name": "15 TF-Bern-Logo: ohne vs. mit Logo-Referenz",
+  "seeds": [15101, 15202],
+  "prompts": [
+    { "key": "tshirt", "prompt": "Ein T-Shirt der TF Bern", "research": true, "reference": true },
+    { "key": "hoodie", "prompt": "Eine Lernende mit einem TF Bern Hoodie an einer Drehbank", "format": "portrait", "research": true, "reference": true },
+    { "key": "becher", "prompt": "Ein Kaffeebecher mit dem Logo der Technischen Fachschule Bern auf einem Werkbank-Tisch", "research": true, "reference": true },
+    { "key": "fahne", "prompt": "Eine Fahne der TF Bern weht vor den Bergen", "format": "landscape", "research": true, "reference": true },
+    { "key": "comic", "prompt": "Ein Roboter mit TF-Bern-Logo auf der Brust", "style": "comic", "research": true, "reference": true }
+  ],
+  "variants": [
+    { "key": "ohne", "lab": { "noLogo": true } },
+    { "key": "mit", "lab": {} }
+  ]
+}

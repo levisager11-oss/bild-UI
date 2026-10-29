@@ -381,7 +381,8 @@
       const reference = current.reference
         ? { name: current.reference.name, subject: current.reference.subject, transform: current.reference.transform }
         : null;
-      const data = await postJson('/api/generate', { prompt, format, style, variants: count, advanced: adv, facts, reference, variation, clientId });
+      const data = await postJson('/api/generate', { prompt, format, style, variants: count, advanced: adv, facts, reference, variation,
+        transform: !!(current.plan && current.plan.transform), clientId });
       if (current !== job || current.done) {
         ignoredIds.add(data.promptId);
         fetch('/api/cancel/' + data.promptId, { method: 'POST' }).catch(() => {});
@@ -408,6 +409,7 @@
       plan = await postJson('/api/research/plan', { prompt: current.prompt }, signal);
     } catch {}
     if (current !== job || current.done) return;
+    current.plan = plan;
     const doResearch = !!(plan && plan.needed && researchWanted());
     const doReference = !!(plan && plan.wiki && referenceWanted());
     if (!doResearch && !doReference) {
@@ -523,7 +525,7 @@
       el.grid.hidden = true;
       el.showAll.hidden = true;
     }
-    el.showCaption.hidden = !job.caption && !job.research && !job.reference;
+    el.showCaption.hidden = !job.caption && !job.research && !job.reference && !(job.info && job.info.site);
     setState('result');
   }
 
@@ -559,7 +561,21 @@
       if (cls) p.className = cls;
       parts.push(p);
     };
-    if (job.reference) {
+    const site = job.info && job.info.site;
+    if (site) {
+      // Photo of a school site from kiosk/reference (CC BY needs the author and license).
+      para('Dieses Foto des Standorts hat die KI als Vorlage angeschaut', 'overlay-sub');
+      const fig = document.createElement('figure');
+      fig.className = 'ref-figure';
+      const img = document.createElement('img');
+      img.src = referenceUrl(site);
+      img.alt = `Referenzfoto: ${site.title}`;
+      const cap = document.createElement('figcaption');
+      cap.textContent = `${site.title} · ${site.credit}`;
+      fig.append(img, cap);
+      parts.push(fig);
+    }
+    if (job.reference && !site) {
       const ref = job.reference;
       para('Dieses Foto hat die KI als Vorlage angeschaut', 'overlay-sub');
       const fig = document.createElement('figure');
@@ -599,7 +615,9 @@
     add('Bildmodell', i.model);
     add('Text-Encoder', i.textEncoder);
     add('Sprachmodell', i.languageModel || 'aus (Text direkt ans Bildmodell)');
-    if (job.reference) {
+    if (i.site) add('Standort-Foto', `${i.site.title} (${i.site.credit})`);
+    if (i.logo) add('Logo-Referenz', 'Logo der Technischen Fachschule Bern');
+    if (job.reference && !i.site) {
       const mode = i.reference && i.reference.mode === 'transform' ? 'frei verwandeln' : 'Aussehen übernehmen, Stil und Pose frei';
       add('Referenzbild', `${job.reference.title} (Wikipedia), ${job.reference.license}, eingelesen mit 0,5 Megapixel, Modus: ${mode}`);
     }

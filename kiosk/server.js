@@ -435,6 +435,42 @@ async function handleReference(req, res) {
 // Names of reference photos this server uploaded; only these may be used in a workflow.
 const knownReference = (name) => [...refCache.values()].some((c) => c.ref && c.ref.name === name);
 
+// ---------- School logo ----------
+// The image model does not know the logo. When a request names the school, the real logo goes along as a
+// reference image. Only then: other requests stay as they are.
+const BRAND_RE = /\btf[\s-]?bern\b|technischen? fachschule/i;
+const LOGO_FILE = path.join(__dirname, 'reference', 'tfbern-logo.png');
+const LOGO_DESCRIPTION = 'a blue wireframe drawing of a three-dimensional letter T joined with a letter F, and to its right the black words "TECHNISCHE FACHSCHULE" in two bold lines with "BERN" below in a thin line';
+// Objects that carry the logo. With a site photo the logo is only added when one of these is named.
+const LOGO_OBJECTS = /logo|shirt|hoodie|pulli|pullover|jacke|m(ü|ue)tze|cap\b|becher|tasse|fahne|flagge|tasche|rucksack|sticker|aufkleber|plakat|banner|bus\b|auto\b|fahrzeug|lieferwagen|helm/i;
+
+// School sites: a photo per site in reference/ (see standorte.json). A missing photo is simply skipped.
+const SITES = readJson(path.join(__dirname, 'reference', 'standorte.json'), []).map((site) => ({
+  ...site,
+  re: new RegExp(site.match, 'i'),
+  path: path.join(__dirname, 'reference', site.file),
+}));
+
+// Upload a local file once to ComfyUI's input folder; resolves to the file name there.
+const uploads = new Map();
+function ensureUpload(file, name, type) {
+  if (!uploads.has(name)) {
+    const job = (async () => {
+      const form = new FormData();
+      form.append('image', new Blob([fs.readFileSync(file)], { type }), name);
+      form.append('type', 'input');
+      form.append('overwrite', 'true');
+      const up = await fetch(new URL('/upload/image', COMFY_URL), { method: 'POST', body: form, signal: AbortSignal.timeout(10000) });
+      if (!up.ok) throw new Error(`Upload von ${name} fehlgeschlagen (HTTP ${up.status})`);
+      return (await up.json()).name;
+    })();
+    job.catch(() => uploads.delete(name)); // try again next time
+    uploads.set(name, job);
+  }
+  return uploads.get(name);
+}
+const ensureLogo = () => ensureUpload(LOGO_FILE, 'kiosk_logo_tfbern.png', 'image/png');
+
 // Reachability of ask for the status display, cached for 30 s.
 let askStatus = { checked: 0, ok: false };
 async function getAskStatus() {
@@ -518,7 +554,7 @@ function sizeFor(f, megapixels) {
   return { width: r16(f.width), height: r16(f.height) };
 }
 
-function buildWorkflow({ prompt, format, style, variants, advanced, facts, reference, lab, variation }) {
+function buildWorkflow({ prompt, format, style, variants, advanced, facts, reference, lab, variation, brand }) {
   const f = FORMATS[format] || FORMATS.square;
   const wf = structuredClone(WORKFLOW);
   const adv = cleanAdvanced(advanced);
@@ -540,13 +576,16 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
   let positive = ['4', 0];
   let negative = ['5', 0];
 
-  if (reference) {
-    // The photo goes to the image model (ReferenceMultiLatent) and to the upsampler, which can see images.
-    wf['20'] = { class_type: 'LoadImage', inputs: { image: reference.name } };
+  // Reference images go to the image model (ReferenceMultiLatent) and to the upsampler, which can see images:
+  // a Wikipedia photo of the named thing (node 20) and/or the school logo (node 25).
+  const refs = [...(reference ? [['20', reference.name]] : []), ...(brand ? [['25', brand.name]] : [])];
+  const refImages = Object.fromEntries(refs.map(([node], i) => [`images.image${i}`, [node, 0]]));
+  if (refs.length) {
+    for (const [node, name] of refs) wf[node] = { class_type: 'LoadImage', inputs: { image: name } };
     wf['21'] = { class_type: 'ConditioningZeroOut', inputs: { conditioning: ['4', 0] } };
     wf['22'] = {
       class_type: 'ReferenceMultiLatent',
-      inputs: { positive: ['4', 0], negative: ['21', 0], vae: ['3', 0], resolution: 'resize', 'resolution.megapixels': q.refMegapixels, 'images.image0': ['20', 0] },
+      inputs: { positive: ['4', 0], negative: ['21', 0], vae: ['3', 0], resolution: 'resize', 'resolution.megapixels': q.refMegapixels, ...refImages },
     };
     positive = ['22', 0];
     negative = ['22', 1];
@@ -557,13 +596,18 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
   if (adv.upsampler) {
     let request;
     let system;
-    if (reference) {
-      request = REFERENCE_REQUEST[refMode](prompt, reference.subject);
+    if (refs.length) {
+      request = reference
+        ? REFERENCE_REQUEST[refMode](prompt, reference.subject)
+        : `Create a new image for this request (a description of the picture, not text to show): ${prompt}`;
+      if (brand) {
+        request += `\nThe ${reference ? 'second' : 'first'} image is the official logo of the Technische Fachschule Bern (TF Bern), a vocational school in Bern, Switzerland: ${LOGO_DESCRIPTION}. Wherever the request means TF Bern, the school, its logo or its branding (for example printed on a T-shirt, a cup or a flag), show exactly this logo, unchanged in shape, colors, lettering and proportions, sharp and readable, on a white or light surface. Do not invent a different logo.`;
+      }
       if (styleText) request += `\nStyle: ${styleText}.`;
       request += `\nThe new image is ${ORIENTATION[f.canvas]}.`;
       // When the thing gets transformed, facts about its real surroundings pull the image back to the photo (tested), so leave them out.
       if (facts && refMode === 'faithful') request += `\nVisual facts from a web search: ${facts}`;
-      wf['23'] = { class_type: 'BatchImagesNode', inputs: { 'images.image0': ['20', 0] } };
+      wf['23'] = { class_type: 'BatchImagesNode', inputs: refImages };
       wf['11'].inputs.image = ['23', 0];
       system = EDIT_SYSTEM_PROMPT;
     } else {
@@ -573,7 +617,8 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
       system = SYSTEM_PROMPT;
     }
     // The system rule alone did not stop shop signs like "SCHREINEREI" (tested); said in the request it works.
-    if (!WANTS_TEXT.test(prompt)) request += '\nNo visible lettering, words, signs or labels anywhere in the picture.';
+    if (brand) request += '\nApart from this logo, no other lettering, signs or labels.';
+    else if (!WANTS_TEXT.test(prompt)) request += '\nNo visible lettering, words, signs or labels anywhere in the picture.';
     const t = baseText;
     Object.assign(wf['11'].inputs, {
       prompt: request,
@@ -633,7 +678,7 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
 
   if (separate) {
     // Copy the caption -> encode -> sample -> decode chain for images 2..n, each with a varied caption.
-    const chain = ['11', '4', '6', '7', '8', ...(reference ? ['21', '22'] : [])];
+    const chain = ['11', '4', '6', '7', '8', ...(refs.length ? ['21', '22'] : [])];
     const decoded = [['8', 0]];
     for (let k = 1; k < variants; k++) {
       const id = (n) => `${n}_${k}`;
@@ -678,6 +723,7 @@ function buildWorkflow({ prompt, format, style, variants, advanced, facts, refer
       textEncoder: wf['2'].inputs.clip_name.replace('.safetensors', ''),
       languageModel: adv.upsampler ? WORKFLOW['12'].inputs.clip_name.replace('.safetensors', '') : null,
       reference: reference ? { mode: refMode, megapixels: q.refMegapixels } : null,
+      logo: !!brand,
     },
   };
 }
@@ -729,10 +775,28 @@ async function handleGenerate(req, res) {
   const facts = typeof body.facts === 'string' ? body.facts.trim().slice(0, 1200) : '';
   // Only photos this server fetched itself are accepted as references.
   const r = body.reference;
-  const reference = settings.reference && r && typeof r.name === 'string' && knownReference(r.name)
+  let reference = settings.reference && r && typeof r.name === 'string' && knownReference(r.name)
     ? { name: r.name, subject: String(r.subject || 'the main subject').slice(0, 100), transform: r.transform === true }
     : null;
-  const { workflow, info } = buildWorkflow({ prompt, format: body.format, style: body.style, variants, advanced: body.advanced, facts, reference, lab: body.lab, variation: body.variation === true });
+  // School named: the real logo goes along, and for a named site (Felsenau, Lorraine) a photo of the building.
+  // A Wikipedia photo about the school itself would compete with them, so drop that one.
+  let brand = null;
+  let site = null;
+  if (BRAND_RE.test(prompt) && !(LAB && body.lab && body.lab.noLogo)) {
+    try {
+      const known = SITES.find((x) => x.re.test(prompt) && fs.existsSync(x.path));
+      if (known) {
+        reference = { name: await ensureUpload(known.path, `kiosk_site_${known.key}.jpg`, 'image/jpeg'), subject: known.subject, transform: body.transform === true };
+        site = { name: reference.name, title: known.name, credit: known.credit };
+      } else if (reference && /fachschule|tf\s?bern/i.test(reference.subject)) {
+        reference = null;
+      }
+      if (!known || LOGO_OBJECTS.test(prompt)) brand = { name: await ensureLogo() };
+    } catch (e) {
+      console.error('logo/standort:', errText(e));
+    }
+  }
+  const { workflow, info } = buildWorkflow({ prompt, format: body.format, style: body.style, variants, advanced: body.advanced, facts, reference, lab: body.lab, variation: body.variation === true, brand });
   try {
     const r = await comfyPost('/prompt', {
       prompt: workflow,
@@ -744,7 +808,7 @@ async function handleGenerate(req, res) {
       console.error('ComfyUI rejected workflow:', JSON.stringify(data).slice(0, 2000));
       return sendJson(res, 502, { error: 'ComfyUI hat den Auftrag abgelehnt.' });
     }
-    sendJson(res, 200, { promptId: data.prompt_id, info, prompt });
+    sendJson(res, 200, { promptId: data.prompt_id, info: { ...info, site }, prompt });
   } catch (e) {
     console.error('ComfyUI not reachable:', e.message);
     sendJson(res, 502, { error: 'ComfyUI ist nicht erreichbar.' });
