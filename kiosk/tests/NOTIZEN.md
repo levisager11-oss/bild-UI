@@ -83,7 +83,11 @@ Rahmen:
 ### 08 Formate und 4 Bilder (6 Aufträge)
 - Hoch 1200×1744, Quer 1744×1200 (2 MP) je ≈ 22 s; Bausteine- und 3D-Stil gut. 4 Bilder (1 MP) ≈ 59 s, alle verschieden.
 
-## Stand bei Abbruch (Nutzungslimit, ca. 00:45)
+## Abschluss (ca. 01:50)
+- Nach dem Unterbruch erledigt: 07/05/08 ausgewertet; Recherche nur dauerhaftes Aussehen; keine Titel aus dem Wunsch; «keine Schrift» im Wunsch (WANTS_TEXT); Würfel «baut ein Vogelhaus»; 12 neue Beispielbilder (2 MP, mit Referenzfotos); Startseite «in rund einer halben Minute»; Hinweis «4 Bilder ≈ 1 Min.»; README-Abschnitt.
+- Endtest im echten Kiosk (ohne Labor-Modus): Zytglogge im Winter 33 s inkl. Recherche + Foto; «Nochmal» 29 s (Recherche aus Zwischenspeicher, neues Bild). Layout passt bei 1920×1080 und 1536×864.
+
+## Stand beim Unterbruch (Nutzungslimit, ca. 00:45)
 - Übernommen in server.js/app.js: er_sde, Qualitätsstufen (maximal = 2 MP bei 1 Bild), neue STYLES, Regel gegen Fantasie-Schrift, echte Varianten («Nochmal» + eigene Beschreibung pro Bild), besserer ask-Prüf-Schritt, ask-Zwischenspeicher.
 - Läuft noch im Hintergrund (Ergebnisse im Scratchpad, nicht ausgewertet): 07 echte Motive mit/ohne Recherche+Foto, 05 alle Prompt-Ideen, 08 Formate/4 Varianten.
 - Offen: 07/05/08 auswerten, schwache Prompt-Ideen ersetzen, Beispielbilder für den Bildschirmschoner neu erstellen, Zeitangabe auf der Startseite anpassen («in wenigen Sekunden» → ca. 25 s), README ergänzen, Bericht-Seite.
