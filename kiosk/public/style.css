@@ -406,7 +406,7 @@ textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--tf-blue); }
 }
 .modal-box {
   width: min(900px, 100%);
-  max-height: 100%;
+  max-height: calc(100vh - 48px); /* not 100%: in the centered grid that grows with the content */
   display: flex; flex-direction: column;
   background: var(--tf-white);
   border: 2px solid var(--tf-blue);
@@ -447,8 +447,11 @@ textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--tf-blue); }
 .status-list .is-bad { font-weight: 700; border-left: 4px solid var(--tf-red); padding-left: 8px; }
 .admin-actions { display: flex; flex-direction: column; gap: 10px; }
 .admin-actions .btn { justify-content: flex-start; font-size: 19px; }
-.admin-msg { min-height: 1.3em; margin: 12px 0 0; font-weight: 700; font-size: 18px; }
-.admin-settings { display: grid; gap: 14px; margin-bottom: 20px; }
+.admin-msg { min-height: 1.3em; margin: 0; font-weight: 700; font-size: 18px; }
+.admin-settings { display: grid; gap: 10px; --touch: 54px; } /* a bit flatter, so all rows fit on 1080 px */
+/* Save button always visible, the settings above scroll when the screen is too low. */
+.admin-foot { display: flex; align-items: center; justify-content: flex-end; gap: 24px; }
+.admin-foot .admin-msg { flex: 1; }
 .admin-row { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; font-size: 19px; }
 .admin-row .segments button { min-width: 72px; }
 
