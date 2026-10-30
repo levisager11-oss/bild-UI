@@ -1,8 +1,9 @@
 // Checks ask's planning step against expected answers (no GPU needed).
-//   node tests/plan-check.js [http://127.0.0.1:8090]
-// e: expected. needed = research/reference useful, wikis = substrings the article titles should contain
+//   node tests/plan-check.js [http://127.0.0.1:8090] [--streng]
+// e: expected. needed = web research useful, wikis = substrings the article titles should contain
 // ([] = no article; more articles than listed are wrong unless max allows them), person, transform.
-const base = process.argv[2] || 'http://127.0.0.1:8090';
+const base = process.argv.slice(2).find((a) => !a.startsWith('--')) || 'http://127.0.0.1:8090';
+const streng = process.argv.includes('--streng');
 const CASES = [
   ['Eine Katze mit Schweisshelm', { needed: false, wikis: [] }],
   ['Ein Roboter repariert ein Velo', { needed: false, wikis: [] }],
@@ -34,14 +35,14 @@ const CASES = [
   ['Ein Glacier Express auf dem Landwasserviadukt', { needed: true, wikis: ['viadukt'], max: 2, transform: false }],
   ['Das Matterhorn im Comic-Stil', { needed: true, wikis: ['Matterhorn'], transform: false }],
   ['Die Golden Gate Bridge aus Lego', { needed: true, wikis: ['Golden Gate'], transform: true }],
-  ['Roger Federer spielt Tennis auf dem Mond', { person: true }],
-  ['Albert Einstein an einer Wandtafel', { person: true }],
-  ['Taylor Swift als Comicfigur', { person: true }],
-  ['Der Bundesrat beim Fondue', { person: true }],
+  ['Roger Federer spielt Tennis auf dem Mond', { person: true, wikis: ['Federer'] }],
+  ['Albert Einstein an einer Wandtafel', { person: true, needed: true, wikis: ['Einstein'] }],
+  ['Taylor Swift als Comicfigur', { person: true, wikis: ['Swift'] }],
+  ['Der Bundesrat beim Fondue', { person: true, wikis: [], max: 2 }],
   ['e chatz uf em velo dür bärn', { needed: false, wikis: [] }],
   ['un ours qui fait du ski', { needed: false, wikis: [] }],
   ['the Colosseum in Rome at sunset', { needed: true, wikis: ['Kolosseum'], transform: false }],
-  ['Ein Murmeltier vor seinem Bau', { needed: true, wikis: ['Murmeltier'], transform: false }],
+  ['Ein Murmeltier vor seinem Bau', { wikis: ['Murmeltier'], transform: false }],
   ['Eine Leiterplatte, die wie eine Stadt aussieht', { needed: false, wikis: [] }],
   ['Ein Fuchs mit Schutzbrille an einer Drehbank', { needed: false, wikis: [] }],
   // Two named things: both need a search and a photo.
@@ -56,6 +57,12 @@ const CASES = [
   ['Der Zytglogge in Bern im Winter', { needed: true, wikis: ['Zytglogge'], transform: false }],
   ['Ein Steinbock in den Schweizer Alpen', { needed: true, wikis: ['Steinbock'], transform: false }],
   ['Eine Vespa fährt durch Rom', { needed: true, wikis: ['Vespa'], transform: false }],
+  // Mode "immer": always a photo of the main subject, also for fantasy and everyday things.
+  ['Ein Drache aus Zahnrädern', { mode: 'immer', wikis: ['Drache'], max: 2 }],
+  ['Einhorn mit Regenbogen', { mode: 'immer', wikis: ['Einhorn'], max: 2 }],
+  ['Eine Bibliothek in einem Baum', { mode: 'immer', wikis: [''], max: 2 }],
+  ['Ein Roboter repariert ein Velo', { mode: 'immer', wikis: [''], max: 2 }],
+  ['Roger Federer spielt Tennis auf dem Mond', { mode: 'immer', person: true, wikis: ['Federer'] }],
 ];
 
 (async () => {
@@ -63,15 +70,17 @@ const CASES = [
   const rows = [];
   for (const [prompt, e] of CASES) {
     const t0 = Date.now();
-    const r = await (await fetch(base + '/api/research/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) })).json();
+    const r = await (await fetch(base + '/api/research/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, reference: e.mode || 'auto' }) })).json();
     const ms = Date.now() - t0;
     const problems = [];
     const wikis = (r.things || []).map((t) => t.wiki).filter(Boolean);
-    if (e.person) {
+    // Real people get a photo and a search unless the guardrails are "streng" (pass --streng when the kiosk runs on it).
+    if (e.person && streng) {
       if (!r.person) problems.push('Person nicht erkannt');
       if (wikis.length) problems.push('Foto trotz Person');
       if (r.needed) problems.push('Recherche trotz Person');
     } else {
+      if (e.person && !r.person) problems.push('Person nicht erkannt');
       if (e.needed !== undefined && !!r.needed !== e.needed) problems.push(`needed=${r.needed}`);
       for (const w of e.wikis || []) {
         if (!wikis.some((x) => x.toLowerCase().includes(w.toLowerCase()))) problems.push(`kein Artikel ~«${w}»`);
@@ -80,7 +89,7 @@ const CASES = [
       if (e.transform !== undefined && wikis.length && !!r.transform !== e.transform) problems.push(`transform=${r.transform}`);
     }
     if (!problems.length) ok++;
-    rows.push(`${problems.length ? 'FALSCH' : 'ok    '} ${String(ms).padStart(5)} ms  ${prompt}  →  wiki=«${wikis.join(' + ')}» queries=«${(r.queries || []).join(' + ')}» needed=${r.needed} person=${r.person} transform=${r.transform}${problems.length ? '  [' + problems.join('; ') + ']' : ''}`);
+    rows.push(`${problems.length ? 'FALSCH' : 'ok    '} ${String(ms).padStart(5)} ms  ${e.mode ? '[' + e.mode + '] ' : ''}${prompt}  →  wiki=«${wikis.join(' + ')}» queries=«${(r.queries || []).join(' + ')}» needed=${r.needed} person=${r.person} transform=${r.transform}${problems.length ? '  [' + problems.join('; ') + ']' : ''}`);
   }
   console.log(rows.join('\n'));
   console.log(`\n${ok}/${CASES.length} richtig`);

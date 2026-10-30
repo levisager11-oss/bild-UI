@@ -68,7 +68,7 @@
   let ws = null;
 
   function defaultAdvanced() {
-    return { steps: settings.steps, seedMode: 'random', seed: '', sampler: 'er_sde', upsampler: settings.upsampler, research: true, reference: true };
+    return { steps: settings.steps, seedMode: 'random', seed: '', sampler: 'er_sde', upsampler: settings.upsampler, research: true, reference: 'auto' };
   }
   function advancedChanged() {
     const d = defaultAdvanced();
@@ -80,7 +80,9 @@
   const researchAvailable = () => askReady() && settings.research;
   const referenceAvailable = () => askReady() && settings.reference;
   const researchWanted = () => researchAvailable() && (!settings.allowAdvanced || advanced.research);
-  const referenceWanted = () => referenceAvailable() && (!settings.allowAdvanced || advanced.reference);
+  // Reference photo: 'aus' | 'auto' (ask decides) | 'immer' (always the main subject).
+  const referenceMode = () => !referenceAvailable() ? 'aus' : settings.allowAdvanced ? advanced.reference : 'auto';
+  const referenceWanted = () => referenceMode() !== 'aus';
   const randomSeedValue = () => String(Math.floor(Math.random() * 1e12));
 
   // ---------- Small helpers ----------
@@ -406,7 +408,7 @@
     setProgress('Die KI prüft, ob sie etwas nachschlagen muss', '', null, 'research');
     let plan = null;
     try {
-      plan = await postJson('/api/research/plan', { prompt: current.prompt }, signal);
+      plan = await postJson('/api/research/plan', { prompt: current.prompt, reference: referenceMode() }, signal);
     } catch {}
     if (current !== job || current.done) return;
     if (plan && plan.blocked) return blockJob(plan.error);
@@ -1038,7 +1040,7 @@
   el.proSeedDice.addEventListener('click', () => { advanced.seed = randomSeedValue(); renderPro(); });
   el.proUpsampler.addEventListener('change', (e) => { advanced.upsampler = e.detail === 'true'; updateProLink(); });
   el.proResearch.addEventListener('change', (e) => { advanced.research = e.detail === 'true'; updateProLink(); });
-  el.proReference.addEventListener('change', (e) => { advanced.reference = e.detail === 'true'; updateProLink(); });
+  el.proReference.addEventListener('change', (e) => { advanced.reference = e.detail; updateProLink(); });
   el.proReset.addEventListener('click', () => { advanced = defaultAdvanced(); renderPro(); updateProLink(); });
   el.openPro.addEventListener('click', () => { renderPro(); openModal(el.pro); });
 

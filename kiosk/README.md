@@ -82,10 +82,17 @@ Getestete Regeln (Okt. 2026, rund 60 Vergleichsbilder mit gleichem Seed):
 - **Sonst** (realistisch oder mit Stil): Look, Farben, Bildausschnitt und Pose des Fotos ausdrücklich nicht übernehmen. Sonst geht ein Comic- oder Aquarell-Stil verloren und Tiere übernehmen die Pose aus dem Foto.
 - Pro Ding ein Foto; zwei Fotos vom *selben* Ding waren schlechter. 0,25, 0,5 und 1 MP sehen gleich aus, 0,5 MP ist schneller als 1 MP. Der Prompt-Verbesserer muss das Foto sehen.
 - **Zwei Dinge** (Experiment 21, 9 Wünsche × 2 Seeds, alt = nur das erste Ding vs. neu = beide): klar besser, wo das Bildmodell das zweite Ding nicht kennt – vorher ein beliebiger Berg statt der Eiger-Nordwand, eine erfundene Fachwerkbrücke statt der Kapellbrücke. Bei bekannten Dingen (Matterhorn, Eiffelturm) gleich gut wie vorher, auch Comic-Stil und Lego bleiben erhalten. Wünsche mit nur einem Ding laufen genau gleich wie vorher (gleicher Auftrag, ComfyUI nimmt sogar das Ergebnis aus dem Cache). Mehrzeit mit zweitem Foto ca. 5–6 s.
-- Keine Fotos und keine Recherche bei echten Personen.
+- Echte, bekannte Personen (Einstein, Federer) bekommen Recherche und Foto, ausser die Guardrails stehen auf «streng» (dort sind Personen ganz gesperrt). Respektlose Wünsche sperren die Guardrails vorher. Private Personen nie.
+- Collagen als Wikipedia-Hauptbild (z. B. sechs Katzen bei «Hauskatze») werden übersprungen, dann wird der englische Artikel versucht («house cat» → Cat).
 - Mehrzeit: ca. 1–2 s für das Foto (parallel zur Recherche) und ca. 3 s beim Malen.
 
-Ein- und ausschalten im Betreuer-Menü («Referenzfotos von Wikipedia») und in den Profi-Einstellungen («Referenzfoto»). Braucht ask für den Prüf-Schritt.
+**Wann ein Foto kommt** (Profi-Einstellungen «Referenzfoto»):
+
+- **Automatisch** (Standard): ask entscheidet, nur bei bestimmten echten Dingen, die das Bildmodell nicht genau kennt (Orte, Bauwerke, Marken, seltene Tiere, bekannte Personen).
+- **Immer**: das Hauptmotiv bekommt in jedem Fall ein Foto, auch Drache, Einhorn oder Roboter (dann der nächstliegende Artikel).
+- **Aus**: kein Foto.
+
+Ganz abschalten im Betreuer-Menü («Referenzfotos von Wikipedia»). Braucht ask für den Prüf-Schritt.
 
 ## Logo und Standorte der TF Bern
 
@@ -142,7 +149,7 @@ python -I tests/sheet.py <Ausgabeordner> uebersicht.jpg
 node tests/plan-check.js
 ```
 
-Im Labor-Modus darf eine Anfrage mit `lab` alle Werte aus `QUALITY` überschreiben. `plan-check.js` prüft den Prüf-Schritt von ask an 40 Beispielen.
+Im Labor-Modus darf eine Anfrage mit `lab` alle Werte aus `QUALITY` überschreiben. `plan-check.js` prüft den Prüf-Schritt von ask an 55 Beispielen (mit `--streng`, wenn die Guardrails auf «streng» stehen).
 
 ## Betreuer-Menü
 

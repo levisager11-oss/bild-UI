@@ -188,14 +188,14 @@ function parseJsonAnswer(text) {
   }
 }
 
-const PLAN_PROMPT = `You help an image generator at a school open day. The request may be in German, Swiss German dialect, French, English or with typos.
+const PLAN_PROMPT_TEXT = `You help an image generator at a school open day. The request may be in German, Swiss German dialect, French, English or with typos.
 Decide whether drawing it well needs factual knowledge about a specific real-world thing that an image model may not know exactly:
 - named places, landmarks, buildings, bridges, mountains, rivers and lakes
 - specific vehicles, machines and products, also by brand or model (a Vespa, a Swiss army knife, an SBB Re 460)
 - animal and plant species that are not everyday animals (a bearded vulture, an ibex, an axolotl, an edelweiss)
 - artworks, traditions, historical or recent events
 Everyday things and generic scenes do NOT need it: a cat, a dog, a fox, a horse, a cow, a penguin, a robot in a workshop, a city of the future, a dragon made of gears, a unicorn.
-A city or country that is only the setting (a cat cycling through Bern) does not need it either. Never add a landmark the request does not name.
+A city or country that is only the setting (a cat cycling through Bern) does not need it either. Never add a landmark the request does not name.{{PEOPLE}}
 If research is needed, list the specific things it needs, the most important first, so a reference photo of each can be taken from Wikipedia.
 Usually that is one thing. List a second one only when the request itself names two specific things that both need it (e.g. "the Zytglogge in front of the Matterhorn", "an ibex on the Kapellbrücke"). Never more than two.
 Reply with JSON only:
@@ -203,9 +203,23 @@ Reply with JSON only:
  "things": [{"query": "short web search query that finds what this thing looks like",
              "wiki": "exact title of the German Wikipedia article about this thing, or empty; for names with several meanings the title of the meant article, e.g. Jungfrau (Berg), Mönch (Berg), Pilatus (Bergmassiv), Merkur (Planet)",
              "subject": "short English name of this thing, e.g. the Zytglogge clock tower"}],
- "person": true if the request shows a real, named person or a group of real people (e.g. Roger Federer, the Swiss Federal Council, a famous band),
+ "person": true if the request shows a real, named person or a group of real people (e.g. Roger Federer, the Swiss Federal Council, a famous band); an artwork that shows a person (the Mona Lisa) is not a person,
  "transform": true if the request turns a listed thing into something else or changes its form (e.g. as a spaceship, made of chocolate, as a robot, built from bricks), false if it is shown as it is, also when only a drawing style is asked}
 "things" is empty when research is not needed.`;
+
+// Added when the visitor sets "Referenzfoto: Immer".
+const PLAN_FORCE = `
+The visitor wants a reference photo in any case: "things" must list at least the main subject of the picture with a German Wikipedia article,
+also when it is everyday, generic, invented or a fantasy creature. Then take the closest real thing or the article about the idea itself,
+e.g. Drache, Einhorn, Roboter, Bibliothek, Stadt.`;
+
+// Real, famous people get a web search and a photo only where the guardrails allow them in pictures at all
+// (not on "streng"). The guardrail check runs first and blocks disrespectful wishes.
+const PEOPLE_OK = `
+Famous real people with a Wikipedia article (Albert Einstein, Roger Federer, Mozart) also need it: the image model does not know their faces well.
+List them as things with the article about the person (e.g. Albert Einstein). Private persons (a teacher, my brother) never.`;
+const planPrompt = (peopleOk, force) =>
+  PLAN_PROMPT_TEXT.replace('{{PEOPLE}}', peopleOk ? PEOPLE_OK : '') + (force ? PLAN_FORCE + (peopleOk ? '' : ' Real people are still never listed.') : '');
 
 const SEARCH_PROMPT = `Research the visual appearance of the specific real-world things in an image request. Use the web search.
 Then reply with JSON only: {"facts": "3 to 6 short English sentences per named thing with visual facts only: shape, colors, materials, size, typical surroundings, distinctive details", "sources": [{"title": "page title", "url": "https://..."}]}.
@@ -359,14 +373,18 @@ async function handleResearchPlan(req, res) {
   const prompt = String(body.prompt || '').trim().slice(0, 1000);
   // The guardrail check runs alongside the plan, so /api/generate later finds its answer in the cache.
   const guard = prompt ? checkPrompt(prompt) : Promise.resolve({ ok: true });
-  if ((!settings.research && !settings.reference) || !askConfig().configured || !prompt) {
+  // Reference photo wish of the visitor: auto (ask decides), always, or off.
+  const refMode = !settings.reference ? 'aus' : settings.allowAdvanced && ['aus', 'auto', 'immer'].includes(body.reference) ? body.reference : 'auto';
+  if ((!settings.research && refMode === 'aus') || !askConfig().configured || !prompt) {
     const g = await guard;
     return sendJson(res, 200, g.ok ? { needed: false, off: true } : blockedReply(g));
   }
   try {
-    const key = 'plan:' + prompt.toLowerCase();
+    const force = refMode === 'immer';
+    const peopleOk = settings.guardrails !== 'streng';
+    const key = `plan:${force ? 'immer:' : ''}${peopleOk ? 'leute:' : ''}${prompt.toLowerCase()}`;
     let plan = cached(key);
-    const planning = plan ? Promise.resolve(plan) : askChat(PLAN_PROMPT, prompt, askConfig().planExtra, 8000).then(({ text }) => {
+    const planning = plan ? Promise.resolve(plan) : askChat(planPrompt(peopleOk, force), prompt, askConfig().planExtra, 8000).then(({ text }) => {
       const p = parseJsonAnswer(text);
       if (!p) throw new Error('ask lieferte kein JSON');
       remember(key, p);
@@ -382,15 +400,15 @@ async function handleResearchPlan(req, res) {
     const things = raw
       .filter((t) => t && typeof t === 'object')
       .map((t) => {
-        const wiki = settings.reference && plan.person !== true ? String(t.wiki || '').trim().slice(0, 150) : '';
+        const wiki = refMode !== 'aus' && (plan.person !== true || peopleOk) ? String(t.wiki || '').trim().slice(0, 150) : '';
         return { query: String(t.query || '').trim().slice(0, 200), wiki, subject: String(t.subject || '').trim().slice(0, 100) || wiki };
       })
       .filter((t) => (t.query || t.wiki) && !seen.has((t.wiki || t.query).toLowerCase()) && seen.add((t.wiki || t.query).toLowerCase()))
       .slice(0, 2);
     const queries = things.map((t) => t.query).filter(Boolean);
     sendJson(res, 200, {
-      // No research and no reference photo for real people.
-      needed: settings.research && plan.needed === true && plan.person !== true && queries.length > 0,
+      // Research and reference photos for real people only where the guardrails allow people at all.
+      needed: settings.research && plan.needed === true && (plan.person !== true || peopleOk) && queries.length > 0,
       things,
       queries,
       transform: plan.transform === true,
@@ -460,8 +478,11 @@ const words = (s) => String(s).toLowerCase().normalize('NFC').split(/[^\p{L}\p{N
 // The English name from the planning step ("the Pilatus mountain near Lucerne") is searched first: a bare
 // "Pilatus" also finds Pontius Pilatus, a singer and an aircraft maker.
 async function findReference(title, subject = '') {
-  for (const lang of ['de', 'en']) {
-    const ref = await referenceFromPage(lang, title, { subject });
+  // The English name as an article title too ("house cat" → Cat): the German lead image is sometimes a collage.
+  const bare = subject.replace(/^(the|a|an)\s+/i, '').trim();
+  const direct = [['de', title], ['en', title], ...(bare && bare.toLowerCase() !== title.toLowerCase() ? [['en', bare]] : [])];
+  for (const [lang, t] of direct) {
+    const ref = await referenceFromPage(lang, t, { subject, noPeople: t === bare });
     if (ref) return ref;
   }
   const key = words(title)[0];
@@ -513,6 +534,7 @@ async function referenceFromPage(lang, title, { noPeople = false, subject = '' }
   if (!page || page.missing !== undefined || !page.pageimage || !page.thumbnail) return null;
   if (page.pageprops && page.pageprops.disambiguation !== undefined) return null;
   if (/\.(svg|gif|tiff?)$/i.test(page.pageimage)) return null; // maps, logos, diagrams
+  if (/collage|montage|composite|mosaic|variety|varieties/i.test(page.pageimage)) return null; // several animals or things in one picture
   const item = page.pageprops && page.pageprops.wikibase_item;
   if (noPeople && await isHuman(item)) return null;
   if (subject && !(await fitsSubject(item, page.title, subject))) return null;
