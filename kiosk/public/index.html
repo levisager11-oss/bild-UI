@@ -281,7 +281,27 @@
     </div>
   </div>
 
-  <!-- Staff menu: Ctrl+Alt+B -->
+  <!-- Password for the staff menu: tap the logo 5 times or Ctrl+Alt+B -->
+  <div class="modal" id="login" hidden role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2 id="loginTitle">Betreuer-Menü</h2>
+        <button class="btn btn-secondary" type="button" data-close>Abbrechen</button>
+      </div>
+      <form class="modal-body mail-body" id="loginForm" autocomplete="off">
+        <label class="field-label" for="loginPassword">Passwort</label>
+        <div class="mail-input">
+          <input id="loginPassword" type="password" maxlength="100" autocomplete="off" autocapitalize="off" spellcheck="false">
+        </div>
+        <p class="field-error" id="loginError" role="alert" hidden></p>
+      </form>
+      <div class="modal-foot mail-foot">
+        <button class="btn btn-primary" id="loginSend" type="submit" form="loginForm">Öffnen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Staff menu (after the password) -->
   <div class="modal" id="admin" hidden role="dialog" aria-modal="true" aria-labelledby="adminTitle">
     <div class="modal-box modal-wide">
       <div class="modal-head">

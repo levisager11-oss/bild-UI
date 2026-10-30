@@ -14,6 +14,8 @@ const mail = require('./mail');
 const COMFY_URL = new URL(process.env.COMFY_URL || 'http://192.168.60.37:8188');
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '127.0.0.1';
+// Passwort fürs Betreuer-Menü (5× aufs Logo tippen). Steht nur hier im Server, nicht im Browser-Code.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'TFBern_3013';
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = path.join(__dirname, 'data');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
@@ -1182,6 +1184,26 @@ async function handleSettings(req, res) {
   }
 }
 
+// Prüft das Betreuer-Passwort. Nach einem Fehlversuch 1 s Pause, damit niemand durchprobiert.
+let loginBusy = false;
+async function handleAdminLogin(req, res) {
+  let body;
+  try {
+    body = await readBody(req);
+  } catch {
+    return sendJson(res, 400, { error: 'Ungültige Anfrage' });
+  }
+  if (loginBusy) return sendJson(res, 429, { error: 'Bitte kurz warten.' });
+  const given = crypto.createHash('sha256').update(String(body.password || '')).digest();
+  const wanted = crypto.createHash('sha256').update(ADMIN_PASSWORD).digest();
+  if (crypto.timingSafeEqual(given, wanted)) return sendJson(res, 200, { ok: true });
+  loginBusy = true;
+  await new Promise((r) => setTimeout(r, 1000));
+  loginBusy = false;
+  console.log('Betreuer-Menü: falsches Passwort');
+  sendJson(res, 403, { error: 'Falsches Passwort' });
+}
+
 async function handleAdmin(res, action) {
   if (action === 'reset-counter') {
     counter = { date: today(), images: 0 };
@@ -1264,6 +1286,7 @@ const server = http.createServer(async (req, res) => {
     if (url === '/api/reference') return handleReference(req, res);
     if (url === '/api/settings') return handleSettings(req, res);
     if (url === '/api/mail') return handleMail(req, res);
+    if (url === '/api/admin-login') return handleAdminLogin(req, res);
     if (url.startsWith('/api/cancel/')) return handleCancel(res, url.split('/').pop());
     if (url.startsWith('/api/admin/')) return handleAdmin(res, url.split('/').pop());
     return sendJson(res, 404, { error: 'not found' });

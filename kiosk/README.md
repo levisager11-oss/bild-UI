@@ -190,7 +190,7 @@ Im Labor-Modus darf eine Anfrage mit `lab` alle Werte aus `QUALITY` überschreib
 
 ## Betreuer-Menü
 
-**Strg+Alt+B** auf einer angeschlossenen Tastatur. Zeigt den Status (ComfyUI, Grafikkarte, Warteschlange) und erlaubt:
+**5× schnell aufs TF-Bern-Logo oben links tippen** (innert 3 Sekunden) oder **Strg+Alt+B** auf einer Tastatur, dann das Passwort eingeben. Das Passwort steht in `server.js` (`ADMIN_PASSWORD`) und lässt sich mit der Umgebungsvariable `ADMIN_PASSWORD` ändern. Der Server prüft es, im Browser-Code steht es nicht. Nach einem falschen Passwort wartet der Server 1 Sekunde. Zeigt den Status (ComfyUI, Grafikkarte, Warteschlange) und erlaubt:
 
 - Standard-Schritte, max. Anzahl Bilder, Auto-Reset- und Bildschirmschoner-Zeit
 - Prompt-Verbesserer, Besucherbilder im Schoner und Profi-Einstellungen an/aus

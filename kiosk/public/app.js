@@ -47,6 +47,8 @@
     aResearch: $('aResearch'), aGuardrails: $('aGuardrails'), aReference: $('aReference'), aQuality: $('aQuality'),
     admin: $('admin'), adminStatus: $('adminStatus'), adminMsg: $('adminMsg'), adminSave: $('adminSave'),
     adminSaver: $('adminSaver'), adminReload: $('adminReload'),
+    login: $('login'), loginForm: $('loginForm'), loginPassword: $('loginPassword'), loginError: $('loginError'), loginSend: $('loginSend'),
+    logo: document.querySelector('.topbar .logo'),
     aSteps: $('aSteps'), aIdle: $('aIdle'), aSaver: $('aSaver'), aMaxVariants: $('aMaxVariants'),
     aUpsampler: $('aUpsampler'), aShowRecent: $('aShowRecent'), aAllowAdvanced: $('aAllowAdvanced'), aMail: $('aMail'),
     openMail: $('openMail'), mail: $('mail'), mailPickRow: $('mailPickRow'), mailPick: $('mailPick'),
@@ -929,6 +931,7 @@
     advanced = defaultAdvanced();
     closeModal(el.pro);
     closeModal(el.mail);
+    closeModal(el.login);
     onPromptInput();
     renderIdeas();
     setState('idle');
@@ -970,6 +973,7 @@
   function closeModal(m) {
     m.hidden = true;
     if (m === el.mail) clearMail();
+    if (m === el.login) clearLogin();
   }
 
   // Steppers: [data-stepper] with − / + buttons around an <output>.
@@ -1137,6 +1141,45 @@
     }
   }));
   el.adminSaver.addEventListener('click', () => { closeModal(el.admin); startScreensaver(); });
+
+  // ---------- Password for the staff menu ----------
+  // 5× aufs Logo tippen (innert 3 s) oder Strg+Alt+B. Das Passwort prüft der Server.
+  function clearLogin() {
+    el.loginPassword.value = '';
+    el.loginError.hidden = true;
+    el.loginPassword.classList.remove('has-error');
+  }
+  function openLogin() {
+    clearLogin();
+    openModal(el.login);
+    setTimeout(() => el.loginPassword.focus(), 50);
+  }
+  let logoTaps = [];
+  el.logo.addEventListener('pointerdown', () => {
+    const now = Date.now();
+    logoTaps = logoTaps.filter((t) => now - t < 3000).concat(now);
+    if (logoTaps.length >= 5) {
+      logoTaps = [];
+      if (el.admin.hidden && el.login.hidden) openLogin();
+    }
+  });
+  el.loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (el.loginSend.disabled) return;
+    el.loginSend.disabled = true;
+    try {
+      await postJson('/api/admin-login', { password: el.loginPassword.value });
+      closeModal(el.login);
+      openAdmin();
+    } catch (err) {
+      el.loginError.textContent = err.message;
+      el.loginError.hidden = false;
+      el.loginPassword.classList.add('has-error');
+      el.loginPassword.select();
+    } finally {
+      el.loginSend.disabled = false;
+    }
+  });
   el.adminReload.addEventListener('click', () => location.reload());
 
   document.querySelectorAll('.modal [data-close]').forEach((b) => b.addEventListener('click', () => closeModal(b.closest('.modal'))));
@@ -1414,7 +1457,7 @@
     // e.code statt nur e.key: Unter Linux liefert Chromium bei Strg+Alt das AltGr-Zeichen («”» statt «b»).
     if (e.ctrlKey && e.altKey && (e.code === 'KeyB' || e.key.toLowerCase() === 'b')) {
       e.preventDefault();
-      if (el.admin.hidden) openAdmin();
+      if (el.admin.hidden) openLogin();
       else closeModal(el.admin);
       return;
     }
