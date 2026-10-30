@@ -1411,7 +1411,8 @@
   document.addEventListener('contextmenu', (e) => e.preventDefault());
 
   document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'b') {
+    // e.code statt nur e.key: Unter Linux liefert Chromium bei Strg+Alt das AltGr-Zeichen («”» statt «b»).
+    if (e.ctrlKey && e.altKey && (e.code === 'KeyB' || e.key.toLowerCase() === 'b')) {
       e.preventDefault();
       if (el.admin.hidden) openAdmin();
       else closeModal(el.admin);
