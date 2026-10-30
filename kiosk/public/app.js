@@ -1144,7 +1144,7 @@
 
   // ---------- Image by e-mail ----------
   // The address lives only in the input field: cleared when the dialog closes, after sending and on reset.
-  const MAIL_DOMAINS = ['@gmail.com', '@icloud.com', '@outlook.com', '@hotmail.com', '@bluewin.ch', '@gmx.ch', '@ict-tfbern.ch'];
+  const MAIL_DOMAINS = ['@gmail.com', '@icloud.com', '@outlook.com', '@hotmail.com', '@bluewin.ch', '@gmx.ch'];
   const MAIL_RE = /^[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
   let mailPicked = 0;
   let mailBusy = false;
