@@ -524,3 +524,31 @@ textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--tf-blue); }
   .progress #cancel { grid-column: 1; grid-row: auto; }
   .setting { grid-template-columns: 1fr; }
 }
+
+/* ---------- Image by e-mail ---------- */
+.mail-body { padding-top: 24px; }
+.mail-pick { display: flex; gap: 12px; margin-bottom: 24px; }
+.mail-pick button { position: relative; flex: 1; max-width: 200px; padding: 0; border: 4px solid transparent; background: var(--tf-blue-50); aspect-ratio: 1; overflow: hidden; }
+.mail-pick button[aria-checked="true"] { border-color: var(--tf-blue); }
+.mail-pick img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.mail-pick span { position: absolute; left: 0; bottom: 0; padding: 4px 10px; background: var(--tf-blue); color: var(--tf-white); font-weight: 700; }
+.mail-pick button[aria-checked="true"]::after { content: "✓"; position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; display: grid; place-items: center; background: var(--tf-blue); color: var(--tf-white); font-weight: 700; font-size: 20px; }
+.mail-single { margin-bottom: 24px; }
+.mail-single img { display: block; max-width: 200px; max-height: 200px; }
+.mail-input input {
+  display: block; width: 100%;
+  border: 2px solid var(--tf-blue); border-radius: 0;
+  padding: 16px 20px;
+  font: inherit; font-weight: 300; font-size: clamp(22px, 1.5vw, 28px);
+  color: var(--tf-black); background: var(--tf-white);
+  user-select: text; -webkit-user-select: text;
+}
+.mail-input input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--tf-blue); }
+.mail-input input.has-error { border-color: var(--tf-red); }
+.mail-domains { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.mail-domains button { min-height: 48px; padding: 6px 14px; border: 2px solid var(--tf-blue); background: var(--tf-white); color: var(--tf-blue); font-weight: 700; font-size: 17px; }
+.mail-domains button:active { background: var(--tf-blue); color: var(--tf-white); }
+.mail-note { margin: 16px 0 0; font-weight: 300; font-size: 16px; }
+.mail-done { margin-top: 20px; padding: 16px 20px; background: var(--tf-blue); color: var(--tf-white); font-size: 20px; display: flex; flex-direction: column; gap: 4px; }
+.mail-foot { display: flex; justify-content: flex-end; }
+.mail-foot .btn { min-width: 220px; }

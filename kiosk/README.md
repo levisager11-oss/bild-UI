@@ -31,6 +31,7 @@ Das erstellt `dist/Kiosk.zip` (ca. 40 MB) mit allem, was der Kiosk braucht, auch
 - Profi-Einstellungen für Besucher: Schritte, Seed, Sampler, Prompt-Verbesserer und Recherche an/aus
 - Optional: Recherche im Web über ask, wenn ein Prompt Weltwissen braucht (siehe unten)
 - Optional: Referenzfoto von Wikipedia für echte Orte, Bauwerke, Tiere und Fahrzeuge (siehe unten)
+- Bild per Mail senden: Besucher wählt ein Bild aus und gibt die Mail-Adresse ein (siehe unten)
 - Bildzähler «Heute schon … Bilder erstellt»
 - Hinweis, wenn ComfyUI nicht erreichbar ist
 - Auto-Reset nach Inaktivität, danach Bildschirmschoner mit Beispielbildern und den letzten Besucherbildern
@@ -106,6 +107,22 @@ Nennt ein Wunsch «TF Bern», «TFBern» oder «Technische Fachschule», bekommt
 - **Abwechslung:** Sonst sähe jedes Bild aus wie das Foto bzw. das Logo immer auf Weiss. Darum bekommt jedes Bild einen eigenen Blickwinkel (`SITE_VIEWS`: Drohne, von weit weg, schräg, durch Bäume …) und für das Logo eine eigene Farbe und Umgebung (`LOGO_COLORS`, `LOGO_SETTINGS`). Nennt der Wunsch selbst Farbe, Ort oder Blickwinkel, gilt der Wunsch. Ausschalten: `vary: false` in `QUALITY`.
 
 Wünsche ohne TF Bern bleiben unverändert (getestet: identischer Auftrag).
+
+## Bild per Mail senden
+
+Nach dem Bild: «Per Mail senden» → bei mehreren Bildern eins antippen → Adresse eingeben (Knöpfe für @gmail.com, @bluewin.ch usw.) → «Senden». Der Kiosk-Server holt das Bild selbst aus ComfyUI (nur echte Ergebnisse, keine fremden Dateien) und schickt es als PNG-Anhang mit kurzem Text und der Beschreibung des Besuchers.
+
+- Mailserver `es-vs01.ict-tfbern.ch`, Port 25, ohne Verschlüsselung und ohne Login, Absender `pfsense@ict-tfbern.ch` (`mail.js`; ändern über `MAIL_HOST`, `MAIL_PORT`, `MAIL_FROM`).
+- **Der Mailserver muss Mails vom Kiosk-PC weiterleiten (Relay).** Sonst antwortet er «454 Relay access denied», der Besucher sieht «Die Mail konnte nicht verschickt werden», und das Betreuer-Menü zeigt den Fehler unter «Mails heute».
+- Die Adresse wird nicht gespeichert und nicht protokolliert (auch nicht in Fehlermeldungen). Das Feld wird nach dem Senden, beim Schliessen und beim Auto-Reset geleert.
+- Die Workflow-Daten, die ComfyUI ins PNG schreibt, werden vor dem Versand entfernt.
+- Höchstens 10 Mails pro Minute. Ein-/ausschalten im Betreuer-Menü («Bild per Mail senden»).
+
+Relay prüfen, ohne eine Mail zu schicken:
+
+```bash
+node -e "require('./mail').smtp('jemand@example.com','',{dryRun:true}).then(()=>console.log('ok'),e=>console.log(e.message))"
+```
 
 ## Guardrails (Filter für Wünsche)
 

@@ -48,14 +48,17 @@
     admin: $('admin'), adminStatus: $('adminStatus'), adminMsg: $('adminMsg'), adminSave: $('adminSave'),
     adminSaver: $('adminSaver'), adminReload: $('adminReload'),
     aSteps: $('aSteps'), aIdle: $('aIdle'), aSaver: $('aSaver'), aMaxVariants: $('aMaxVariants'),
-    aUpsampler: $('aUpsampler'), aShowRecent: $('aShowRecent'), aAllowAdvanced: $('aAllowAdvanced'),
+    aUpsampler: $('aUpsampler'), aShowRecent: $('aShowRecent'), aAllowAdvanced: $('aAllowAdvanced'), aMail: $('aMail'),
+    openMail: $('openMail'), mail: $('mail'), mailPickRow: $('mailPickRow'), mailPick: $('mailPick'),
+    mailSingle: $('mailSingle'), mailSingleImg: $('mailSingleImg'), mailTo: $('mailTo'), mailDomains: $('mailDomains'),
+    mailError: $('mailError'), mailDone: $('mailDone'), mailDoneText: $('mailDoneText'), mailSend: $('mailSend'),
     phases: [...document.querySelectorAll('[data-phase]')],
   };
 
   const clientId = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
 
   // ---------- State ----------
-  let settings = { steps: 16, upsampler: true, maxVariants: 4, idleSeconds: 60, screensaverSeconds: 30, showRecent: true, allowAdvanced: true, research: true, guardrails: 'mittel' };
+  let settings = { steps: 16, upsampler: true, maxVariants: 4, idleSeconds: 60, screensaverSeconds: 30, showRecent: true, allowAdvanced: true, research: true, guardrails: 'mittel', mail: true };
   let status = { comfy: true, gpu: null, queue: null, ask: { configured: false }, imagesToday: 0, recentCount: 0 };
   let state = 'idle';           // idle | generating | result
   let format = 'square';
@@ -193,6 +196,8 @@
     if (count > settings.maxVariants) setCount(settings.maxVariants);
     el.openPro.hidden = !settings.allowAdvanced;
     if (!settings.allowAdvanced) advanced = defaultAdvanced();
+    el.openMail.hidden = settings.mail === false;
+    if (settings.mail === false) closeModal(el.mail);
     updateProLink();
   }
 
@@ -906,7 +911,7 @@
 
   function hasSession() {
     return state === 'result' || el.prompt.value.trim() !== '' || !el.error.hidden || format !== 'square'
-      || count !== 1 || style !== null || advancedChanged() || !el.pro.hidden;
+      || count !== 1 || style !== null || advancedChanged() || !el.pro.hidden || !el.mail.hidden;
   }
 
   function resetAll() {
@@ -923,6 +928,7 @@
     setStyle(null);
     advanced = defaultAdvanced();
     closeModal(el.pro);
+    closeModal(el.mail);
     onPromptInput();
     renderIdeas();
     setState('idle');
@@ -963,6 +969,7 @@
   }
   function closeModal(m) {
     m.hidden = true;
+    if (m === el.mail) clearMail();
   }
 
   // Steppers: [data-stepper] with − / + buttons around an <output>.
@@ -1058,6 +1065,9 @@
       ['Guardrails', !settings.guardrails || settings.guardrails === 'aus'
         ? 'AUS' : `${settings.guardrails}${status.ask && status.ask.configured ? ', Wortliste + ask' : ', nur Wortliste'}`, settings.guardrails === 'aus'],
       ['Gesperrte Wünsche', String(status.blockedCount || 0)],
+      ['Mails heute', !status.mail ? '–' : settings.mail === false ? 'Mailversand AUS'
+        : `${status.mail.sent} verschickt, ${status.mail.failed} fehlgeschlagen (${status.mail.host})`, !!(status.mail && status.mail.failed)],
+      ...(status.mail && status.mail.lastError ? [['  Letzter Mailfehler', status.mail.lastError, true]] : []),
       ...(status.blocked || []).slice(0, 5).map((b) => [`  ${b.at} (${b.by})`, `${b.category}: «${b.prompt}»`]),
       ['Verbindung Seite', ws && ws.readyState === WebSocket.OPEN ? 'Live-Verbindung steht' : 'Live-Verbindung unterbrochen', !(ws && ws.readyState === WebSocket.OPEN)],
     ];
@@ -1079,6 +1089,7 @@
     setChecked(el.aUpsampler, settings.upsampler);
     setChecked(el.aShowRecent, settings.showRecent);
     setChecked(el.aAllowAdvanced, settings.allowAdvanced);
+    setChecked(el.aMail, settings.mail !== false);
     setChecked(el.aResearch, settings.research);
     setChecked(el.aReference, settings.reference);
     setChecked(el.aQuality, settings.quality || 'maximal');
@@ -1100,6 +1111,7 @@
         upsampler: getChecked(el.aUpsampler) === 'true',
         showRecent: getChecked(el.aShowRecent) === 'true',
         allowAdvanced: getChecked(el.aAllowAdvanced) === 'true',
+        mail: getChecked(el.aMail) === 'true',
         research: getChecked(el.aResearch) === 'true',
         reference: getChecked(el.aReference) === 'true',
         quality: getChecked(el.aQuality) || 'maximal',
@@ -1129,6 +1141,118 @@
 
   document.querySelectorAll('.modal [data-close]').forEach((b) => b.addEventListener('click', () => closeModal(b.closest('.modal'))));
   document.querySelectorAll('.modal').forEach((m) => m.addEventListener('pointerdown', (e) => { if (e.target === m) closeModal(m); }));
+
+  // ---------- Image by e-mail ----------
+  // The address lives only in the input field: cleared when the dialog closes, after sending and on reset.
+  const MAIL_DOMAINS = ['@gmail.com', '@icloud.com', '@outlook.com', '@hotmail.com', '@bluewin.ch', '@gmx.ch', '@ict-tfbern.ch'];
+  const MAIL_RE = /^[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+  let mailPicked = 0;
+  let mailBusy = false;
+
+  el.mailDomains.replaceChildren(...MAIL_DOMAINS.map((d) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = d;
+    b.addEventListener('click', () => {
+      // Replace whatever follows the "@" with the picked domain.
+      el.mailTo.value = el.mailTo.value.trim().split('@')[0] + d;
+      el.mailTo.focus();
+      onMailInput();
+    });
+    return b;
+  }));
+
+  function clearMail() {
+    el.mailTo.value = '';
+    el.mailTo.blur();
+    el.mailError.hidden = true;
+    el.mailTo.classList.remove('has-error');
+    el.mailDone.hidden = true;
+    mailBusy = false;
+    el.mailSend.disabled = false;
+    el.mailSend.textContent = 'Senden';
+  }
+
+  function onMailInput() {
+    el.mailError.hidden = true;
+    el.mailTo.classList.remove('has-error');
+    el.mailDone.hidden = true;
+  }
+
+  function pickMailImage(i) {
+    mailPicked = i;
+    el.mailPick.querySelectorAll('button').forEach((b, j) => b.setAttribute('aria-checked', String(j === i)));
+  }
+
+  function openMail() {
+    if (state !== 'result' || !job || !job.images.length || settings.mail === false) return;
+    closeZoom();
+    clearMail();
+    const many = job.images.length > 1;
+    el.mailPickRow.hidden = !many;
+    el.mailSingle.hidden = many;
+    if (many) {
+      el.mailPick.replaceChildren(...job.images.map((src, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('role', 'radio');
+        b.setAttribute('aria-label', `Bild ${i + 1}`);
+        const img = document.createElement('img');
+        img.src = src;
+        img.alt = '';
+        const n = document.createElement('span');
+        n.textContent = i + 1;
+        b.append(img, n);
+        b.addEventListener('click', () => pickMailImage(i));
+        return b;
+      }));
+      // Grid on screen: let the visitor choose. One image enlarged: that one.
+      pickMailImage(el.grid.hidden ? job.selected || 0 : 0);
+    } else {
+      el.mailSingleImg.src = job.images[0];
+      mailPicked = 0;
+    }
+    openModal(el.mail);
+  }
+
+  async function sendMail() {
+    if (mailBusy || !job) return;
+    const email = el.mailTo.value.trim();
+    if (!MAIL_RE.test(email)) {
+      el.mailError.textContent = email ? 'Diese Mail-Adresse sieht nicht richtig aus. Bitte prüf sie nochmal.' : 'Bitte gib deine Mail-Adresse ein.';
+      el.mailError.hidden = false;
+      el.mailTo.classList.add('has-error');
+      el.mailTo.focus();
+      return;
+    }
+    mailBusy = true;
+    el.mailSend.disabled = true;
+    el.mailSend.textContent = 'Wird gesendet …';
+    el.mailError.hidden = true;
+    el.mailDone.hidden = true;
+    try {
+      await postJson('/api/mail', { promptId: job.id, index: mailPicked, email, prompt: job.prompt });
+      el.mailDoneText.textContent = `Dein Bild ist an ${email} verschickt. Falls es nicht ankommt, schau im Spam-Ordner nach.`;
+      el.mailDone.hidden = false;
+      el.mailDone.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      el.mailTo.value = '';
+      el.mailTo.blur();
+      refreshStatus();
+    } catch (e) {
+      el.mailError.textContent = e.message;
+      el.mailError.hidden = false;
+      el.mailError.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    } finally {
+      mailBusy = false;
+      el.mailSend.disabled = false;
+      el.mailSend.textContent = 'Senden';
+    }
+  }
+
+  el.openMail.addEventListener('click', openMail);
+  el.mailSend.addEventListener('click', sendMail);
+  el.mailTo.addEventListener('input', onMailInput);
+  el.mailTo.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMail(); } });
 
   // ---------- Zoom ----------
   // Full screen view of the result: two fingers to zoom, one finger to move, double tap or +/- to zoom.

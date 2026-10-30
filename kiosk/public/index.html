@@ -122,6 +122,7 @@
       <div class="actions" id="actions" hidden>
         <button class="btn btn-primary" id="again" type="button">Nochmal</button>
         <button class="btn btn-secondary" id="showAll" type="button" hidden>Alle Bilder</button>
+        <button class="btn btn-secondary" id="openMail" type="button" hidden>Per Mail senden</button>
         <button class="btn btn-secondary" id="showCaption" type="button" aria-pressed="false">Was hat die KI verstanden?</button>
         <button class="btn btn-secondary" id="showTech" type="button" aria-pressed="false">Technik</button>
         <button class="btn btn-secondary" id="restart" type="button">Neues Bild</button>
@@ -249,6 +250,37 @@
     </div>
   </div>
 
+  <!-- Send the image by e-mail -->
+  <div class="modal" id="mail" hidden role="dialog" aria-modal="true" aria-labelledby="mailTitle">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2 id="mailTitle">Bild per Mail senden</h2>
+        <button class="btn btn-secondary" type="button" data-close>Schliessen</button>
+      </div>
+      <div class="modal-body mail-body">
+        <div id="mailPickRow" hidden>
+          <span class="field-label">Welches Bild möchtest du?</span>
+          <div class="mail-pick" id="mailPick" role="radiogroup" aria-label="Bild auswählen"></div>
+        </div>
+        <div class="mail-single" id="mailSingle"><img id="mailSingleImg" alt="Dein Bild"></div>
+        <label class="field-label" for="mailTo">Deine Mail-Adresse</label>
+        <div class="mail-input">
+          <input id="mailTo" type="email" inputmode="email" maxlength="254" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="name@beispiel.ch">
+        </div>
+        <div class="mail-domains" id="mailDomains"></div>
+        <p class="field-error" id="mailError" role="alert" hidden></p>
+        <p class="mail-note">Deine Adresse wird nur für diese eine Mail verwendet und nicht gespeichert.</p>
+        <div class="mail-done" id="mailDone" role="status" hidden>
+          <strong>Unterwegs!</strong>
+          <span id="mailDoneText"></span>
+        </div>
+      </div>
+      <div class="modal-foot mail-foot">
+        <button class="btn btn-primary" id="mailSend" type="button">Senden</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Staff menu: Ctrl+Alt+B -->
   <div class="modal" id="admin" hidden role="dialog" aria-modal="true" aria-labelledby="adminTitle">
     <div class="modal-box modal-wide">
@@ -331,6 +363,12 @@
                 <button type="button" role="radio" data-value="locker">Locker</button>
                 <button type="button" role="radio" data-value="mittel">Mittel</button>
                 <button type="button" role="radio" data-value="streng">Streng</button>
+              </div>
+            </div>
+            <div class="admin-row"><span>Bild per Mail senden</span>
+              <div class="segments" id="aMail">
+                <button type="button" role="radio" data-value="true">An</button>
+                <button type="button" role="radio" data-value="false">Aus</button>
               </div>
             </div>
             <div class="admin-row"><span>Profi-Einstellungen für Besucher</span>

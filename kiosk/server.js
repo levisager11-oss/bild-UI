@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const guardrails = require('./guardrails');
+const mail = require('./mail');
 
 const COMFY_URL = new URL(process.env.COMFY_URL || 'http://192.168.60.37:8188');
 const PORT = Number(process.env.PORT || 8080);
@@ -54,6 +55,7 @@ const DEFAULT_SETTINGS = {
   reference: true,       // give the image model a free Wikipedia photo of the named thing
   quality: 'maximal',    // schnell | hoch | maximal, see QUALITY_LEVELS
   guardrails: 'mittel',  // aus | locker | mittel | streng, see guardrails.js
+  mail: true,            // visitors may send their image by e-mail (mail.js)
 };
 
 // Samplers visitors can pick in the advanced settings.
@@ -118,6 +120,7 @@ function cleanSettings(input) {
   if (input.reference != null) s.reference = !!input.reference;
   if (['schnell', 'hoch', 'maximal'].includes(input.quality)) s.quality = input.quality;
   if (guardrails.LEVELS.includes(input.guardrails)) s.guardrails = input.guardrails;
+  if (input.mail != null) s.mail = !!input.mail;
   return s;
 }
 
@@ -1096,6 +1099,60 @@ async function handleDone(req, res) {
   sendJson(res, 200, { imagesToday: imagesToday() });
 }
 
+// ---------- Image by e-mail ----------
+// The address is only used for this one mail: not stored, not logged.
+const MAIL_PER_MINUTE = 10;
+let mailTimes = [];
+let mailCount = { date: today(), sent: 0, failed: 0, lastError: null };
+const mailToday = () => (mailCount.date === today() ? mailCount : { date: today(), sent: 0, failed: 0, lastError: null });
+
+async function handleMail(req, res) {
+  if (!settings.mail) return sendJson(res, 403, { error: 'Der Mailversand ist ausgeschaltet.' });
+  let body;
+  try {
+    body = await readBody(req);
+  } catch {
+    return sendJson(res, 400, { error: 'Ungültige Anfrage' });
+  }
+  const to = String(body.email || '').trim();
+  if (!mail.validEmail(to)) return sendJson(res, 400, { error: 'Diese Mail-Adresse sieht nicht richtig aus. Bitte prüf sie nochmal.' });
+  const id = String(body.promptId || '');
+  const index = Number(body.index) || 0;
+  if (!/^[\w-]+$/.test(id)) return sendJson(res, 400, { error: 'Ungültige Anfrage' });
+  const now = Date.now();
+  mailTimes = mailTimes.filter((t) => now - t < 60_000);
+  if (mailTimes.length >= MAIL_PER_MINUTE) return sendJson(res, 429, { error: 'Gerade wurden sehr viele Mails verschickt. Bitte versuch es in einer Minute nochmal.' });
+
+  // Only images this ComfyUI really made: look them up in its history.
+  let image;
+  try {
+    const h = await (await comfy('/history/' + id)).json();
+    const out = h[id] && h[id].outputs && h[id].outputs['9'];
+    const img = out && out.images && out.images[index];
+    if (!img) return sendJson(res, 404, { error: 'Das Bild ist nicht mehr da. Erstell bitte ein neues.' });
+    const r = await comfy('/view?' + new URLSearchParams({ filename: img.filename, subfolder: img.subfolder || '', type: img.type || 'temp' }), { timeout: 20000 });
+    if (!r.ok) throw new Error('view ' + r.status);
+    image = { data: Buffer.from(await r.arrayBuffer()), type: (r.headers.get('content-type') || 'image/png').split(';')[0] };
+  } catch (e) {
+    console.error('Mail: Bild nicht geladen:', errText(e));
+    return sendJson(res, 502, { error: 'Das Bild konnte nicht geladen werden.' });
+  }
+
+  mailTimes.push(now);
+  const count = (mailCount = mailToday());
+  try {
+    await mail.sendImage({ to, prompt: String(body.prompt || '').trim().slice(0, 400), ...image });
+    count.sent++;
+    sendJson(res, 200, { ok: true });
+  } catch (e) {
+    const msg = e.message.replace(/<?[^\s<>]+@[^\s<>]+>?/g, '<Adresse>'); // keep the visitor's address out of logs
+    count.failed++;
+    count.lastError = msg;
+    console.error('Mail nicht verschickt:', msg);
+    sendJson(res, 502, { error: 'Die Mail konnte nicht verschickt werden. Bitte sag jemandem von der TF Bern Bescheid.' });
+  }
+}
+
 async function handleStatus(res) {
   let comfyOk = false;
   let gpu = null;
@@ -1112,7 +1169,7 @@ async function handleStatus(res) {
     queue = { running: q.queue_running.length, pending: q.queue_pending.length };
   } catch {}
   const ask = await getAskStatus();
-  sendJson(res, 200, { comfy: comfyOk, comfyUrl: COMFY_URL.origin, gpu, queue, ask, imagesToday: imagesToday(), recentCount: recent.length, blocked, blockedCount, settings });
+  sendJson(res, 200, { comfy: comfyOk, comfyUrl: COMFY_URL.origin, gpu, queue, ask, imagesToday: imagesToday(), recentCount: recent.length, blocked, blockedCount, mail: { ...mailToday(), host: `${mail.MAIL_HOST}:${mail.MAIL_PORT}`, from: mail.MAIL_FROM }, settings });
 }
 
 async function handleSettings(req, res) {
@@ -1206,6 +1263,7 @@ const server = http.createServer(async (req, res) => {
     if (url === '/api/research/run') return handleResearchRun(req, res);
     if (url === '/api/reference') return handleReference(req, res);
     if (url === '/api/settings') return handleSettings(req, res);
+    if (url === '/api/mail') return handleMail(req, res);
     if (url.startsWith('/api/cancel/')) return handleCancel(res, url.split('/').pop());
     if (url.startsWith('/api/admin/')) return handleAdmin(res, url.split('/').pop());
     return sendJson(res, 404, { error: 'not found' });
