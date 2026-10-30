@@ -1065,7 +1065,7 @@
       ['Besucherbilder im Schoner', String(status.recentCount || 0)],
       ['ask (Recherche)', !status.ask || !status.ask.configured
         ? 'nicht eingerichtet (data/ask.json fehlt)'
-        : `${status.ask.model}, ${status.ask.ok ? 'erreichbar' : 'NICHT erreichbar'}`, !!(status.ask && status.ask.configured && !status.ask.ok)],
+        : `${status.ask.model}, ${status.ask.ok ? 'erreichbar' : `NICHT erreichbar${status.ask.error ? ` (${status.ask.error})` : ''}`}`, !!(status.ask && status.ask.configured && !status.ask.ok)],
       ['Guardrails', !settings.guardrails || settings.guardrails === 'aus'
         ? 'AUS' : `${settings.guardrails}${status.ask && status.ask.configured ? ', Wortliste + ask' : ', nur Wortliste'}`, settings.guardrails === 'aus'],
       ['Gesperrte Wünsche', String(status.blockedCount || 0)],

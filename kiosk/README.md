@@ -40,6 +40,8 @@ Der Kiosk läuft auch auf einem Raspberry Pi 4 oder 5 mit Raspberry Pi OS (mit D
 
 Von Hand starten: `~/Kiosk/start-kiosk.sh`. Beenden mit Alt+F4, dann stoppt auch der Server. Server-Meldungen stehen in `data/server.log`. Der Pi muss ComfyUI (`192.168.60.37:8188`) erreichen, sonst zeigt die Oberfläche den Hinweis «nicht erreichbar». Andere Adresse: `COMFY_URL=http://… ~/Kiosk/start-kiosk.sh` bzw. die Zeile `Exec=` in der Autostart-Datei anpassen.
 
+**ask oder ComfyUI nicht erreichbar?** `bash ~/Kiosk/check-pi.sh` zeigt Uhrzeit, Node-Version und den genauen Fehler pro Verbindung. Das Betreuer-Menü nennt den Grund ebenfalls in Klammern. Häufige Gründe: `CERT_NOT_YET_VALID` oder `CERT_HAS_EXPIRED` heisst, die Uhr des Pi stimmt nicht. Der Pi 4 hat keine Batterie-Uhr und holt die Zeit per NTP, im Schulnetz evtl. gesperrt. Dann in `/etc/systemd/timesyncd.conf` unter `NTP=` den Zeitserver der Schule eintragen und `sudo systemctl restart systemd-timesyncd`. `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` heisst, ein Zertifikat der Schule fehlt; die `.crt`-Datei nach `/usr/local/share/ca-certificates/` kopieren und `sudo update-ca-certificates`, dann `NODE_EXTRA_CA_CERTS` in `start-kiosk.sh` darauf zeigen lassen. `ETIMEDOUT` oder `ECONNREFUSED` heisst, eine Firewall blockiert den Pi.
+
 Unterschiede zu Windows: Chromium statt Edge, Node.js aus Raspberry Pi OS (Version 18 oder neuer genügt). `--use-system-ca` setzt das Start-Skript nur, wenn das Node es kennt (ab 22.15); `ask-ca.pem` wird wie unter Windows mitgegeben. Bleibt auf dem Touchscreen ein Mauszeiger stehen: in `raspi-config` unter Advanced Options auf X11 umstellen und `unclutter` installieren.
 
 ## Funktionen

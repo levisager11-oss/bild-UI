@@ -15,7 +15,7 @@ const OUT = path.join(DIST, 'Kiosk');
 const ZIP_NAME = PI ? 'Kiosk-Pi.zip' : 'Kiosk.zip';
 const ZIP = path.join(DIST, ZIP_NAME);
 
-const FILES = ['server.js', 'guardrails.js', 'mail.js', 'workflow.json', 'system_prompt.txt', 'system_prompt_edit.txt', 'start-kiosk.bat', 'start-kiosk.sh', 'install-pi.sh', 'ask.example.json', 'ask-ca.pem', 'README.md'];
+const FILES = ['server.js', 'guardrails.js', 'mail.js', 'workflow.json', 'system_prompt.txt', 'system_prompt_edit.txt', 'start-kiosk.bat', 'start-kiosk.sh', 'install-pi.sh', 'check-pi.sh', 'ask.example.json', 'ask-ca.pem', 'README.md'];
 const DIRS = ['public', 'reference'];
 // Betreuer-Einstellungen und ask-Zugang mitnehmen, den Bildzähler nicht.
 const DATA_FILES = ['ask.json', 'settings.json'];

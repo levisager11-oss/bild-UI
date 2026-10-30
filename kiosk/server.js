@@ -645,13 +645,16 @@ async function getAskStatus() {
   if (Date.now() - askStatus.checked > 30000) {
     try {
       const headers = c.apiKey ? { Authorization: 'Bearer ' + c.apiKey } : {};
-      const r = await fetch(c.url + '/models', { headers, signal: AbortSignal.timeout(3000) });
-      askStatus = { checked: Date.now(), ok: r.ok };
-    } catch {
-      askStatus = { checked: Date.now(), ok: false };
+      const r = await fetch(c.url + '/models', { headers, signal: AbortSignal.timeout(5000) });
+      askStatus = { checked: Date.now(), ok: r.ok, error: r.ok ? '' : `HTTP ${r.status}` };
+    } catch (e) {
+      // Grund behalten (z. B. CERT_NOT_YET_VALID bei falscher Uhrzeit), fürs Betreuer-Menü und das Log.
+      const error = (e.cause && (e.cause.code || e.cause.message)) || e.name || e.message;
+      if (error !== askStatus.error) console.log(`ask nicht erreichbar: ${error}`);
+      askStatus = { checked: Date.now(), ok: false, error };
     }
   }
-  return { configured: true, ok: askStatus.ok, model: c.model };
+  return { configured: true, ok: askStatus.ok, model: c.model, error: askStatus.error };
 }
 
 // Visitor overrides from "Profi-Einstellungen". Missing values fall back to the settings.

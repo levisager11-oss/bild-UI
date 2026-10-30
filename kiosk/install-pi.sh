@@ -30,8 +30,8 @@ fi
 echo "Node.js $("$NODE" -v) ok"
 
 # Windows-Zeilenenden entfernen, falls die Dateien über ein Windows-ZIP kamen.
-sed -i 's/\r$//' start-kiosk.sh install-pi.sh
-chmod +x start-kiosk.sh install-pi.sh
+sed -i 's/\r$//' start-kiosk.sh install-pi.sh check-pi.sh
+chmod +x start-kiosk.sh install-pi.sh check-pi.sh
 mkdir -p data
 
 echo "== Autostart einrichten"
