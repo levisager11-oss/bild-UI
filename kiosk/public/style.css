@@ -160,6 +160,8 @@ textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--tf-blue); }
 .segments button[aria-checked="true"] { background: var(--tf-blue); color: var(--tf-white); }
 .segments button:disabled { border-color: var(--tf-blue-50); color: var(--tf-blue-50); background: var(--tf-white); cursor: not-allowed; }
 .segments button[aria-checked="true"]:disabled { background: var(--tf-blue-50); color: var(--tf-white); }
+/* Buttons as wide as their label (e.g. "Automatisch"), not all equal. */
+.segments-fit button { flex: 1 0 auto; padding: 0 18px; }
 .segments-wrap { flex-wrap: wrap; gap: 8px; }
 .segments-wrap button, .segments-wrap button + button { flex: 1 1 auto; border-left-width: 2px; }
 .shape { display: inline-block; border: 2px solid currentColor; }
