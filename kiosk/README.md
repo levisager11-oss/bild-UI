@@ -87,6 +87,8 @@ Alternativ gehen Umgebungsvariablen: `ASK_URL`, `ASK_KEY`, `ASK_MODEL`. Änderun
 
 **Zertifikat:** Seit dem Zertifikatswechsel im Aug. 2026 schickt `ask.ict-tfbern.ch` ein falsches Zwischenzertifikat mit. Browser merken das nicht, Node lehnt die Verbindung ab («unable to verify the first certificate»), ask gilt dann im Betreuer-Menü als nicht erreichbar. Deshalb liegt das richtige Zwischenzertifikat («Sectigo Public Server Authentication CA DV R36», gültig bis 2036) als `ask-ca.pem` bei, `start-kiosk.bat` gibt es Node über `NODE_EXTRA_CA_CERTS` mit. Wird der Server von Hand gestartet: `set NODE_EXTRA_CA_CERTS=ask-ca.pem` vorher setzen. Sobald die ICT die Kette auf dem Server korrigiert, ist die Datei nicht mehr nötig, schadet aber auch nicht.
 
+Seit Ende Okt. 2026 hat ask ein Zertifikat der schuleigenen CA (`ICT-TFBERN-ROOT-CA`, Zwischen-CA `ict-tfbern-subCA`). Windows-PCs der Schule kennen sie, der Raspberry Pi nicht (Fehler `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`). Deshalb stehen beide Zertifikate ebenfalls in `ask-ca.pem` (öffentliche Zertifikate, nichts Geheimes). Wechselt die ICT die CA, die neuen Zertifikate aus Windows exportieren (certlm.msc → Vertrauenswürdige Stammzertifizierungsstellen, Base-64) und an `ask-ca.pem` anhängen.
+
 ## Referenzfotos von Wikipedia
 
 Nennt ein Wunsch ein bestimmtes echtes Ding (Zytglogge, Matterhorn, Bartgeier, Tesla Cybertruck …), zeigt der Kiosk dem Bildmodell ein Foto davon. Das Motiv sieht dadurch deutlich echter aus. Ablauf:
