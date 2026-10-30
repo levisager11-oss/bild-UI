@@ -22,6 +22,26 @@ node pack.js
 
 Das erstellt `dist/Kiosk.zip` (ca. 40 MB) mit allem, was der Kiosk braucht, auch `node.exe` im Ordner `node\`. Auf dem Kiosk-PC entpacken (z. B. nach `C:\Kiosk`, nicht im ZIP selbst starten) und `start-kiosk.bat` doppelklicken. Dort muss nichts installiert sein, Edge ist bei Windows dabei. Das Paket enthält den ask-Schlüssel (`data/ask.json`), also nicht weitergeben. Der Bildzähler startet auf dem Kiosk-PC neu.
 
+## Auf einem Raspberry Pi
+
+Der Kiosk läuft auch auf einem Raspberry Pi 4 oder 5 mit Raspberry Pi OS (mit Desktop, 64 Bit empfohlen). Die Bilder rechnet weiterhin ComfyUI auf dem Server mit Grafikkarte, der Pi zeigt nur die Oberfläche in Chromium an. 2 GB RAM reichen, 4 GB sind angenehmer.
+
+1. Auf dem Windows-PC `node pack.js --pi` ausführen. Das erstellt `dist/Kiosk-Pi.zip` (ohne `node.exe`, mit `data/ask.json`, also nicht weitergeben).
+2. Die ZIP auf den Pi bringen (USB-Stick oder `scp`) und entpacken, z. B. nach `~/Kiosk`:
+   ```bash
+   unzip Kiosk-Pi.zip -d ~
+   ```
+3. Einmal einrichten (fragt nach dem Passwort für `sudo`):
+   ```bash
+   bash ~/Kiosk/install-pi.sh
+   ```
+   Das installiert Node.js und Chromium aus Raspberry Pi OS, legt einen Autostart an (`~/.config/autostart/tfbern-kiosk.desktop`), stellt die automatische Anmeldung ein und schaltet das Abdunkeln des Bildschirms ab.
+4. `sudo reboot`. Danach startet der Kiosk von selbst im Vollbild.
+
+Von Hand starten: `~/Kiosk/start-kiosk.sh`. Beenden mit Alt+F4, dann stoppt auch der Server. Server-Meldungen stehen in `data/server.log`. Der Pi muss ComfyUI (`192.168.60.37:8188`) erreichen, sonst zeigt die Oberfläche den Hinweis «nicht erreichbar». Andere Adresse: `COMFY_URL=http://… ~/Kiosk/start-kiosk.sh` bzw. die Zeile `Exec=` in der Autostart-Datei anpassen.
+
+Unterschiede zu Windows: Chromium statt Edge, Node.js aus Raspberry Pi OS (Version 18 oder neuer genügt). `--use-system-ca` setzt das Start-Skript nur, wenn das Node es kennt (ab 22.15); `ask-ca.pem` wird wie unter Windows mitgegeben. Bleibt auf dem Touchscreen ein Mauszeiger stehen: in `raspi-config` unter Advanced Options auf X11 umstellen und `unclutter` installieren.
+
 ## Funktionen
 
 - Prompt-Ideen, Würfel (Wer + macht was + wo) und 8 Stil-Knöpfe
