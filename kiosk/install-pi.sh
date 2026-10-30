@@ -45,6 +45,27 @@ Exec=$DIR/start-kiosk.sh
 X-GNOME-Autostart-enabled=true
 EOF
 
+echo "== Alt+F4 abschalten (labwc)"
+# Raspberry Pi OS nutzt labwc. Alt+F4 tut dort jetzt nichts mehr. Bei anderen Desktops schliesst
+# Alt+F4 Chromium zwar, start-kiosk.sh öffnet es aber nach einer Sekunde wieder.
+# Beenden nur noch über Betreuer-Menü → «Kiosk beenden».
+RC="$HOME/.config/labwc/rc.xml"
+if [ -f /etc/xdg/labwc/rc.xml ] || [ -f "$RC" ]; then
+  mkdir -p "$(dirname "$RC")"
+  # Eigene Datei ersetzt die des Systems, darum zuerst die des Systems übernehmen.
+  [ -f "$RC" ] || cp /etc/xdg/labwc/rc.xml "$RC" 2>/dev/null \
+    || printf '<?xml version="1.0"?>\n<labwc_config>\n<keyboard>\n<default/>\n</keyboard>\n</labwc_config>\n' >"$RC"
+  if ! grep -q 'tfbern-kiosk' "$RC"; then
+    KEY='<keybind key="A-F4"><action name="None"/></keybind><!-- tfbern-kiosk -->'
+    if grep -q '</keyboard>' "$RC"; then
+      sed -i "s#</keyboard>#$KEY\n</keyboard>#" "$RC"
+    else
+      sed -i "s#</labwc_config>#<keyboard>\n<default/>\n$KEY\n</keyboard>\n</labwc_config>#" "$RC"
+    fi
+  fi
+  command -v labwc >/dev/null 2>&1 && labwc --reconfigure 2>/dev/null || true
+fi
+
 if command -v raspi-config >/dev/null 2>&1; then
   echo "== Automatische Anmeldung und Bildschirm immer an"
   sudo raspi-config nonint do_boot_behaviour B4 || echo "Hinweis: automatische Anmeldung konnte nicht gesetzt werden."

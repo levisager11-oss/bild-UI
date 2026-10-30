@@ -21,6 +21,10 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = path.join(__dirname, 'data');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const COUNTER_FILE = path.join(DATA_DIR, 'counter.json');
+// «Kiosk beenden» im Betreuer-Menü: Der Server legt diese Datei an und beendet sich, start-kiosk.sh
+// schliesst dann Chromium. Nur wenn das Start-Skript KIOSK_QUIT=1 setzt (Pi/Linux).
+const QUIT_FILE = path.join(DATA_DIR, 'quit');
+const CAN_QUIT = process.env.KIOSK_QUIT === '1';
 const WORKFLOW = JSON.parse(fs.readFileSync(path.join(__dirname, 'workflow.json'), 'utf8'));
 const SYSTEM_PROMPT = fs.readFileSync(path.join(__dirname, 'system_prompt.txt'), 'utf8');
 // System prompt for the prompt upsampler when it also sees a reference image (from the ComfyUI template "FLUX 3 Image Klein: Image Edit").
@@ -1175,10 +1179,11 @@ async function handleStatus(res) {
     queue = { running: q.queue_running.length, pending: q.queue_pending.length };
   } catch {}
   const ask = await getAskStatus();
-  sendJson(res, 200, { comfy: comfyOk, comfyUrl: COMFY_URL.origin, gpu, queue, ask, imagesToday: imagesToday(), recentCount: recent.length, blocked, blockedCount, mail: { ...mailToday(), host: `${mail.MAIL_HOST}:${mail.MAIL_PORT}`, from: mail.MAIL_FROM }, settings });
+  sendJson(res, 200, { comfy: comfyOk, comfyUrl: COMFY_URL.origin, gpu, queue, ask, imagesToday: imagesToday(), recentCount: recent.length, canQuit: CAN_QUIT, blocked, blockedCount, mail: { ...mailToday(), host: `${mail.MAIL_HOST}:${mail.MAIL_PORT}`, from: mail.MAIL_FROM }, settings });
 }
 
 async function handleSettings(req, res) {
+  if (!isAdmin(req)) return sendJson(res, 403, { error: 'Bitte neu anmelden.' });
   try {
     settings = cleanSettings(await readBody(req));
     writeJson(SETTINGS_FILE, settings);
@@ -1189,7 +1194,13 @@ async function handleSettings(req, res) {
 }
 
 // Prüft das Betreuer-Passwort. Nach einem Fehlversuch 1 s Pause, damit niemand durchprobiert.
+// Bei Erfolg gibt es einen Schlüssel, den die Seite bei jeder Betreuer-Aktion mitschickt (X-Admin-Token).
 let loginBusy = false;
+const adminTokens = new Set();
+function isAdmin(req) {
+  const t = String(req.headers['x-admin-token'] || '');
+  return t !== '' && adminTokens.has(t);
+}
 async function handleAdminLogin(req, res) {
   let body;
   try {
@@ -1202,7 +1213,12 @@ async function handleAdminLogin(req, res) {
   if (!password) return sendJson(res, 503, { error: 'Kein Passwort eingerichtet (data/admin.json fehlt).' });
   const given = crypto.createHash('sha256').update(String(body.password || '')).digest();
   const wanted = crypto.createHash('sha256').update(password).digest();
-  if (crypto.timingSafeEqual(given, wanted)) return sendJson(res, 200, { ok: true });
+  if (crypto.timingSafeEqual(given, wanted)) {
+    const token = crypto.randomBytes(24).toString('hex');
+    adminTokens.add(token);
+    if (adminTokens.size > 20) adminTokens.delete(adminTokens.values().next().value);
+    return sendJson(res, 200, { ok: true, token });
+  }
   loginBusy = true;
   await new Promise((r) => setTimeout(r, 1000));
   loginBusy = false;
@@ -1210,7 +1226,16 @@ async function handleAdminLogin(req, res) {
   sendJson(res, 403, { error: 'Falsches Passwort' });
 }
 
-async function handleAdmin(res, action) {
+async function handleAdmin(req, res, action) {
+  if (!isAdmin(req)) return sendJson(res, 403, { error: 'Bitte neu anmelden.' });
+  if (action === 'quit') {
+    if (!CAN_QUIT) return sendJson(res, 400, { error: 'Beenden geht nur mit start-kiosk.sh.' });
+    writeJson(QUIT_FILE, { at: new Date().toISOString() });
+    console.log('Betreuer-Menü: Kiosk wird beendet');
+    sendJson(res, 200, { ok: true });
+    setTimeout(() => process.exit(0), 300);
+    return;
+  }
   if (action === 'reset-counter') {
     counter = { date: today(), images: 0 };
     writeJson(COUNTER_FILE, counter);
@@ -1294,7 +1319,7 @@ const server = http.createServer(async (req, res) => {
     if (url === '/api/mail') return handleMail(req, res);
     if (url === '/api/admin-login') return handleAdminLogin(req, res);
     if (url.startsWith('/api/cancel/')) return handleCancel(res, url.split('/').pop());
-    if (url.startsWith('/api/admin/')) return handleAdmin(res, url.split('/').pop());
+    if (url.startsWith('/api/admin/')) return handleAdmin(req, res, url.split('/').pop());
     return sendJson(res, 404, { error: 'not found' });
   }
   if (req.method === 'GET') {
