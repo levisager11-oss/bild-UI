@@ -18,7 +18,7 @@ const ZIP = path.join(DIST, ZIP_NAME);
 const FILES = ['server.js', 'guardrails.js', 'mail.js', 'workflow.json', 'system_prompt.txt', 'system_prompt_edit.txt', 'start-kiosk.bat', 'start-kiosk.sh', 'install-pi.sh', 'check-pi.sh', 'ask.example.json', 'ask-ca.pem', 'README.md'];
 const DIRS = ['public', 'reference'];
 // Betreuer-Einstellungen und ask-Zugang mitnehmen, den Bildzähler nicht.
-const DATA_FILES = ['ask.json', 'settings.json'];
+const DATA_FILES = ['ask.json', 'settings.json', 'admin.json'];
 
 if (!PI && process.platform !== 'win32') {
   console.error('Das Windows-Paket (mit node.exe) nur unter Windows bauen. Für den Pi: node pack.js --pi');

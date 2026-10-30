@@ -14,8 +14,9 @@ const mail = require('./mail');
 const COMFY_URL = new URL(process.env.COMFY_URL || 'http://192.168.60.37:8188');
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '127.0.0.1';
-// Passwort fürs Betreuer-Menü (5× aufs Logo tippen). Steht nur hier im Server, nicht im Browser-Code.
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'TFBern_3013';
+// Passwort fürs Betreuer-Menü (5× aufs Logo tippen): data/admin.json {"password": "…"} oder ADMIN_PASSWORD.
+// Nicht im Code, weil das Repo öffentlich ist. data/ ist nicht im Git.
+const ADMIN_FILE = path.join(__dirname, 'data', 'admin.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = path.join(__dirname, 'data');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
@@ -1197,8 +1198,10 @@ async function handleAdminLogin(req, res) {
     return sendJson(res, 400, { error: 'Ungültige Anfrage' });
   }
   if (loginBusy) return sendJson(res, 429, { error: 'Bitte kurz warten.' });
+  const password = process.env.ADMIN_PASSWORD || String(readJson(ADMIN_FILE, {}).password || '');
+  if (!password) return sendJson(res, 503, { error: 'Kein Passwort eingerichtet (data/admin.json fehlt).' });
   const given = crypto.createHash('sha256').update(String(body.password || '')).digest();
-  const wanted = crypto.createHash('sha256').update(ADMIN_PASSWORD).digest();
+  const wanted = crypto.createHash('sha256').update(password).digest();
   if (crypto.timingSafeEqual(given, wanted)) return sendJson(res, 200, { ok: true });
   loginBusy = true;
   await new Promise((r) => setTimeout(r, 1000));
