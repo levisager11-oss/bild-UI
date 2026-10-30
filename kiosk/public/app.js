@@ -46,7 +46,7 @@
     zoomIn: $('zoomIn'), zoomOut: $('zoomOut'), zoomFit: $('zoomFit'), zoomClose: $('zoomClose'),
     aResearch: $('aResearch'), aGuardrails: $('aGuardrails'), aReference: $('aReference'), aQuality: $('aQuality'),
     admin: $('admin'), adminStatus: $('adminStatus'), adminMsg: $('adminMsg'), adminSave: $('adminSave'),
-    adminSaver: $('adminSaver'), adminReload: $('adminReload'),
+    adminSaver: $('adminSaver'), adminReload: $('adminReload'), adminQuit: $('adminQuit'),
     login: $('login'), loginForm: $('loginForm'), loginPassword: $('loginPassword'), loginError: $('loginError'), loginSend: $('loginSend'),
     logo: document.querySelector('.topbar .logo'),
     aSteps: $('aSteps'), aIdle: $('aIdle'), aSaver: $('aSaver'), aMaxVariants: $('aMaxVariants'),
@@ -113,8 +113,12 @@
     return b ? b.dataset.value : null;
   }
 
+  let adminToken = ''; // from /api/admin-login, sent with every staff action
+  let quitArmed = null; // timer while «Kiosk beenden» waits for the second tap
   async function postJson(url, body, signal) {
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}), signal });
+    const headers = { 'Content-Type': 'application/json' };
+    if (adminToken) headers['X-Admin-Token'] = adminToken;
+    const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body || {}), signal });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw Object.assign(new Error(data.error || 'Unbekannter Fehler'), { blocked: data.blocked === true });
     return data;
@@ -836,7 +840,7 @@
     el.generate.disabled = state === 'generating' || !status.comfy;
     updateCounter(status.imagesToday || 0);
     applySettings();
-    if (!el.admin.hidden) renderAdminStatus();
+    if (!el.admin.hidden) { renderAdminStatus(); if (!quitArmed) el.adminQuit.hidden = !status.canQuit; }
   }
 
   // ---------- Screensaver ----------
@@ -974,6 +978,7 @@
     m.hidden = true;
     if (m === el.mail) clearMail();
     if (m === el.login) clearLogin();
+    if (m === el.admin) adminToken = '';
   }
 
   // Steppers: [data-stepper] with − / + buttons around an <output>.
@@ -1099,6 +1104,7 @@
     setChecked(el.aQuality, settings.quality || 'maximal');
     setChecked(el.aGuardrails, settings.guardrails || 'mittel');
     el.adminMsg.textContent = '';
+    resetQuit();
     stopScreensaver();
     renderAdminStatus();
     openModal(el.admin);
@@ -1142,6 +1148,30 @@
   }));
   el.adminSaver.addEventListener('click', () => { closeModal(el.admin); startScreensaver(); });
 
+  // Kiosk beenden: zweimal tippen (das erste Mal fragt nach). Nur auf dem Pi (start-kiosk.sh).
+  function resetQuit() {
+    clearTimeout(quitArmed);
+    quitArmed = null;
+    el.adminQuit.hidden = !status.canQuit;
+    el.adminQuit.textContent = 'Kiosk beenden';
+    el.adminQuit.classList.remove('is-armed');
+  }
+  el.adminQuit.addEventListener('click', async () => {
+    if (!quitArmed) {
+      el.adminQuit.textContent = 'Wirklich beenden? Nochmals tippen';
+      el.adminQuit.classList.add('is-armed');
+      quitArmed = setTimeout(resetQuit, 4000);
+      return;
+    }
+    resetQuit();
+    try {
+      await postJson('/api/admin/quit');
+      el.adminMsg.textContent = 'Kiosk wird beendet …';
+    } catch (e) {
+      el.adminMsg.textContent = 'Fehlgeschlagen: ' + e.message;
+    }
+  });
+
   // ---------- Password for the staff menu ----------
   // 5× aufs Logo tippen (innert 3 s) oder Strg+Alt+B. Das Passwort prüft der Server.
   function clearLogin() {
@@ -1168,7 +1198,7 @@
     if (el.loginSend.disabled) return;
     el.loginSend.disabled = true;
     try {
-      await postJson('/api/admin-login', { password: el.loginPassword.value });
+      adminToken = (await postJson('/api/admin-login', { password: el.loginPassword.value })).token || '';
       closeModal(el.login);
       openAdmin();
     } catch (err) {
